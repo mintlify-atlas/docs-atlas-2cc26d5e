@@ -1,0 +1,473 @@
+---
+title: Updates Module
+description: Receive events via Long Poll and Webhook with unified context interface
+---
+
+The Updates module provides a unified interface for receiving events from VK using User Long Poll, Bots Long Poll, or Callback API (webhooks).
+
+## Initialization
+
+```typescript
+import { API, Upload, Updates } from 'vk-io';
+
+const api = new API({
+  token: process.env.VK_TOKEN
+});
+
+const upload = new Upload({ api });
+
+const updates = new Updates({
+  api,
+  upload
+});
+```
+
+## Configuration Options
+
+<ParamField path="api" type="API" required>
+  API instance for making requests
+</ParamField>
+
+<ParamField path="upload" type="Upload" required>
+  Upload instance for file operations
+</ParamField>
+
+<ParamField path="pollingWait" type="number" default={3000}>
+  Time to wait (in ms) before re-querying Long Poll
+</ParamField>
+
+<ParamField path="pollingRetryLimit" type="number" default={3}>
+  Number of retries for failed polling requests
+</ParamField>
+
+<ParamField path="pollingGroupId" type="number">
+  Group ID for Bots Long Poll (required for group bots)
+</ParamField>
+
+<ParamField path="webhookSecret" type="string">
+  Secret key for webhook request validation
+</ParamField>
+
+<ParamField path="webhookConfirmation" type="string">
+  Confirmation code for Callback API setup
+</ParamField>
+
+## Event Handling
+
+### Subscribe to Events
+
+Use the `on()` method to handle specific event types:
+
+```typescript
+updates.on('message_new', async (context) => {
+  console.log('New message:', context.text);
+  
+  await context.send('Hello!');
+});
+```
+
+### Event Types vs Subtypes
+
+Events have both a **type** (main category) and **subtypes** (specific events):
+
+```typescript
+// Subscribe by main type - receives ALL message events
+updates.on('message', (context) => {
+  console.log(context.type);     // 'message'
+  console.log(context.subTypes); // ['message_new', 'message_edit', etc.]
+});
+
+// Subscribe by subtype - receives only new messages
+updates.on('message_new', (context) => {
+  console.log(context.subTypes); // ['message_new']
+});
+```
+
+### Multiple Event Types
+
+```typescript
+// Listen to multiple events
+updates.on(['message_new', 'message_edit'], (context) => {
+  console.log('Message created or edited');
+});
+```
+
+## Available Events
+
+### Message Events
+
+<CodeGroup>
+```typescript message_new
+updates.on('message_new', (context) => {
+  console.log('New message from:', context.senderId);
+  console.log('Text:', context.text);
+});
+```
+
+```typescript message_edit
+updates.on('message_edit', (context) => {
+  console.log('Message edited:', context.id);
+});
+```
+
+```typescript message_reply
+updates.on('message_reply', (context) => {
+  console.log('Reply to message');
+});
+```
+</CodeGroup>
+
+### Group Events
+
+```typescript
+updates.on('group_join', (context) => {
+  console.log('User joined:', context.userId);
+});
+
+updates.on('group_leave', (context) => {
+  console.log('User left:', context.userId);
+});
+```
+
+### Wall Events
+
+```typescript
+updates.on(['wall_post_new', 'wall_repost'], (context) => {
+  console.log('Wall post:', context.wall.text);
+});
+```
+
+### Comment Events
+
+```typescript
+updates.on([
+  'photo_comment_new',
+  'video_comment_new',
+  'wall_reply_new'
+], (context) => {
+  console.log('New comment:', context.text);
+});
+```
+
+### Other Events
+
+- `message_event` - Callback button pressed
+- `message_allow` / `message_deny` - Message subscription changes
+- `typing` - User is typing
+- `photo_new` / `video_new` / `audio_new` - New media
+- `poll_vote_new` - New poll vote
+- `user_block` / `user_unblock` - User blocked/unblocked
+- `like_add` / `like_remove` - Like added/removed
+- `market_order_new` / `market_order_edit` - Market order events
+- `donut_subscription_*` - Donut subscription events
+
+<Tip>
+  See [VK Community Events](https://dev.vk.com/api/community-events/json-schema) for complete event list.
+</Tip>
+
+## Middleware Pattern
+
+Updates use middleware chains instead of EventEmitter:
+
+```typescript
+// Middleware that modifies context
+updates.use(async (context, next) => {
+  context.state.startTime = Date.now();
+  
+  await next(); // Pass to next middleware
+  
+  const duration = Date.now() - context.state.startTime;
+  console.log(`Processed in ${duration}ms`);
+});
+
+// Middleware that filters events
+updates.use(async (context, next) => {
+  // Only process messages from specific user
+  if (context.is('message') && context.senderId === 123456) {
+    return next();
+  }
+});
+
+// Handler receives modified context
+updates.on('message_new', (context) => {
+  console.log('Start time:', context.state.startTime);
+});
+```
+
+<Warning>
+  Always return a Promise from middleware. Use `async` functions or explicitly return `next()`.
+</Warning>
+
+### Middleware Best Practices
+
+```typescript
+// BAD: Blocks all events
+updates.use((context, next) => {
+  if (!context.isOutbox) {
+    return; // Stops all non-message events!
+  }
+  return next();
+});
+
+// GOOD: Check event type first
+updates.use((context, next) => {
+  if (context.is('message') && !context.isOutbox) {
+    return;
+  }
+  return next();
+});
+
+// BETTER: Use specific event handler
+updates.on('message', (context, next) => {
+  if (!context.isOutbox) {
+    return;
+  }
+  return next();
+});
+```
+
+## Starting Updates
+
+### Auto-Detection Mode
+
+Automatically detects whether to use polling or webhook:
+
+```typescript
+await updates.start();
+```
+
+### Long Poll (User/Group)
+
+<Tabs>
+  <Tab title="User Long Poll">
+    For user accounts:
+    
+    ```typescript
+    const api = new API({
+      token: process.env.USER_TOKEN
+    });
+    
+    const updates = new Updates({ api, upload });
+    
+    updates.on('message_new', (context) => {
+      console.log('Message:', context.text);
+    });
+    
+    await updates.startPolling();
+    console.log('User Long Poll started');
+    ```
+    
+    <Note>
+      User Long Poll provides fewer events and less complete data.
+    </Note>
+  </Tab>
+  
+  <Tab title="Bots Long Poll">
+    For community bots:
+    
+    ```typescript
+    const api = new API({
+      token: process.env.GROUP_TOKEN
+    });
+    
+    const updates = new Updates({
+      api,
+      upload,
+      pollingGroupId: 123456789  // Your group ID
+    });
+    
+    updates.on('message_new', (context) => {
+      console.log('Message:', context.text);
+    });
+    
+    await updates.startPolling();
+    console.log('Bots Long Poll started');
+    ```
+  </Tab>
+</Tabs>
+
+### Webhook (Callback API)
+
+<Tabs>
+  <Tab title="Built-in Server">
+    Start a standalone HTTP server:
+    
+    ```typescript
+    const updates = new Updates({
+      api,
+      upload,
+      webhookSecret: 'your_secret_key',
+      webhookConfirmation: 'your_confirmation_code'
+    });
+    
+    updates.on('message_new', (context) => {
+      console.log('Message:', context.text);
+    });
+    
+    await updates.startWebhook({
+      port: 8080,
+      host: '0.0.0.0',
+      path: '/webhook'
+    });
+    
+    console.log('Webhook server listening on :8080/webhook');
+    ```
+  </Tab>
+  
+  <Tab title="Express Middleware">
+    Integrate with Express.js:
+    
+    ```typescript
+    import express from 'express';
+    
+    const app = express();
+    
+    const updates = new Updates({
+      api,
+      upload,
+      webhookSecret: 'your_secret_key',
+      webhookConfirmation: 'your_confirmation_code'
+    });
+    
+    updates.on('message_new', (context) => {
+      console.log('Message:', context.text);
+    });
+    
+    // Add webhook route
+    app.post('/webhook', updates.getWebhookCallback());
+    
+    app.listen(3000);
+    ```
+  </Tab>
+  
+  <Tab title="Koa Middleware">
+    Integrate with Koa.js:
+    
+    ```typescript
+    import Koa from 'koa';
+    import bodyParser from 'koa-bodyparser';
+    
+    const app = new Koa();
+    
+    const updates = new Updates({
+      api,
+      upload,
+      webhookSecret: 'your_secret_key',
+      webhookConfirmation: 'your_confirmation_code'
+    });
+    
+    updates.on('message_new', (context) => {
+      console.log('Message:', context.text);
+    });
+    
+    app.use(bodyParser());
+    app.use(updates.getKoaWebhookMiddleware());
+    
+    app.listen(3000);
+    ```
+  </Tab>
+</Tabs>
+
+### HTTPS Webhook
+
+```typescript
+import { readFileSync } from 'fs';
+
+await updates.startWebhook({
+  port: 443,
+  path: '/webhook',
+  tls: {
+    key: readFileSync('./privkey.pem'),
+    cert: readFileSync('./cert.pem')
+  }
+});
+```
+
+## Webhook Setup in VK
+
+1. Go to **Community Settings** → **API Usage** → **Callback API**
+2. Set **API Version** to `5.199` or higher
+3. Add server URL: `https://yourdomain.com/webhook`
+4. Copy **Confirmation Code** to `webhookConfirmation` option
+5. Set **Secret Key** to `webhookSecret` option
+6. Enable required event types
+
+## Stopping Updates
+
+```typescript
+// Stop receiving updates
+await updates.stop();
+```
+
+## Error Handling
+
+```typescript
+import { Composer } from 'vk-io';
+
+const updates = new Updates({
+  api,
+  upload
+});
+
+// Global error handler
+updates.use(async (context, next) => {
+  try {
+    await next();
+  } catch (error) {
+    console.error('Error processing update:', error);
+    
+    if (context.is('message')) {
+      await context.send('An error occurred');
+    }
+  }
+});
+
+updates.on('message_new', async (context) => {
+  // This error will be caught by middleware above
+  throw new Error('Something went wrong');
+});
+```
+
+## Manual Update Dispatch
+
+Process updates manually:
+
+```typescript
+// Handle webhook update
+const webhookUpdate = {
+  type: 'message_new',
+  object: { /* message data */ },
+  group_id: 123456
+};
+
+await updates.handleWebhookUpdate(webhookUpdate);
+
+// Handle polling update
+const pollingUpdate = [10004, /* ...update data */];
+await updates.handlePollingUpdate(pollingUpdate);
+```
+
+## Checking Status
+
+```typescript
+if (updates.isStarted) {
+  console.log('Updates are running');
+  await updates.stop();
+}
+```
+
+## Long Poll Configuration
+
+The polling transport uses specific configuration:
+
+- **Version**: 19 (User Long Poll)
+- **Mode flags**:
+  - `2` - Receive attachments
+  - `8` - Return extended events
+  - `64` - Return online user platform ID  
+  - `128` - Return random_id
+- **Wait time**: 25 seconds per request
+
+<Tip>
+  Webhooks are recommended for production bots as they're more reliable and don't require constant polling.
+</Tip>

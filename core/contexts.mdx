@@ -1,0 +1,408 @@
+---
+title: Context Objects
+description: Unified event context objects with type-safe properties and helper methods
+---
+
+Contexts are event objects that pass through the middleware chain. Each context provides type-safe access to event data and convenient helper methods.
+
+## Base Context
+
+All contexts extend the base `Context` class with these common properties:
+
+### Core Properties
+
+<ParamField path="type" type="string">
+  Main event type (e.g., `'message'`, `'wall_post'`, `'group_join'`)
+</ParamField>
+
+<ParamField path="subTypes" type="string[]">
+  Event subtypes (e.g., `['message_new']`, `['chat_invite_user']`)
+</ParamField>
+
+<ParamField path="source" type="UpdateSource">
+  Event source: `UpdateSource.POLLING` or `UpdateSource.WEBHOOK`
+</ParamField>
+
+<ParamField path="state" type="object" default={{}}>
+  Mutable state object for storing custom data across middleware
+</ParamField>
+
+### Type Checking
+
+Use `is()` to check event types and subtypes:
+
+```typescript
+updates.on('message', (context) => {
+  // Check main type
+  if (context.is('message')) {
+    console.log('This is a message');
+  }
+  
+  // Check subtypes
+  if (context.is(['message_new', 'message_edit'])) {
+    console.log('New or edited message');
+  }
+});
+```
+
+### State Management
+
+Store custom data in context state:
+
+```typescript
+updates.use(async (context, next) => {
+  // Fetch and store user data
+  if (context.is('message')) {
+    context.state.user = await getUserFromDB(context.senderId);
+  }
+  
+  await next();
+});
+
+updates.on('message_new', (context) => {
+  // Access stored data
+  console.log('User:', context.state.user);
+});
+```
+
+## Message Context
+
+**Type**: `'message'`
+
+**Subtypes**: `'message_new'`, `'message_edit'`, `'message_reply'`, chat action events
+
+Handles incoming messages with full support for text, attachments, and chat actions.
+
+### Properties
+
+<ParamField path="id" type="number">
+  Message ID
+</ParamField>
+
+<ParamField path="conversationMessageId" type="number">
+  Message ID within conversation
+</ParamField>
+
+<ParamField path="peerId" type="number">
+  Conversation ID (user ID, chat ID, or group ID)
+</ParamField>
+
+<ParamField path="senderId" type="number">
+  ID of user who sent the message
+</ParamField>
+
+<ParamField path="text" type="string">
+  Message text
+</ParamField>
+
+<ParamField path="isOutbox" type="boolean">
+  Whether message was sent by current user/bot
+</ParamField>
+
+<ParamField path="createdAt" type="number">
+  Message creation timestamp (seconds)
+</ParamField>
+
+<ParamField path="updatedAt" type="number | undefined">
+  Message update timestamp if edited
+</ParamField>
+
+<ParamField path="attachments" type="Attachment[]">
+  Array of message attachments
+</ParamField>
+
+<ParamField path="forwards" type="MessageForwardsCollection">
+  Forwarded messages collection
+</ParamField>
+
+<ParamField path="replyMessage" type="MessageContext | undefined">
+  Replied-to message
+</ParamField>
+
+<ParamField path="messagePayload" type="object | string | undefined">
+  Button payload (from keyboard buttons)
+</ParamField>
+
+### Chat Properties
+
+<ParamField path="chatId" type="number | undefined">
+  Chat ID (for group chats)
+</ParamField>
+
+<ParamField path="isChat" type="boolean">
+  Whether message is from a chat
+</ParamField>
+
+<ParamField path="peerType" type="string">
+  Peer type: `'user'`, `'chat'`, or `'group'`
+</ParamField>
+
+### Methods
+
+<CodeGroup>
+```typescript Send Reply
+await context.send('Hello!');
+
+await context.send({
+  message: 'Hello!',
+  attachment: photoAttachment,
+  keyboard: Keyboard.builder()
+    .textButton({ label: 'Click me' })
+    .inline()
+});
+```
+
+```typescript Reply to Message
+await context.reply('Replying to you', {
+  attachment: 'photo123_456'
+});
+```
+
+```typescript Send DM
+// Send to specific user
+await context.sendMessageToPeer(123456, {
+  message: 'Direct message'
+});
+```
+
+```typescript Edit Message
+await context.editMessage({
+  message: 'Updated text',
+  attachment: newAttachment
+});
+```
+
+```typescript Delete Message
+await context.deleteMessage();
+```
+
+```typescript Mark as Read
+await context.markAsRead();
+```
+
+```typescript Set Activity
+// Show typing indicator
+await context.setActivity();
+```
+</CodeGroup>
+
+### Chat Actions
+
+Detect chat service actions:
+
+```typescript
+updates.on('message', (context) => {
+  if (context.is('chat_invite_user')) {
+    console.log('User invited:', context.eventMemberId);
+  }
+  
+  if (context.is('chat_kick_user')) {
+    console.log('User removed:', context.eventMemberId);
+  }
+  
+  if (context.is('chat_title_update')) {
+    console.log('New title:', context.eventText);
+  }
+  
+  if (context.is('chat_photo_update')) {
+    console.log('Chat photo updated');
+  }
+});
+```
+
+**Available chat action subtypes**:
+- `chat_photo_update` / `chat_photo_remove`
+- `chat_create`
+- `chat_title_update`
+- `chat_invite_user` / `chat_kick_user`
+- `chat_pin_message` / `chat_unpin_message`
+- `chat_invite_user_by_link`
+
+### Example Usage
+
+```typescript
+updates.on('message_new', async (context) => {
+  console.log('From:', context.senderId);
+  console.log('Text:', context.text);
+  
+  // Check for attachments
+  if (context.hasAttachments('photo')) {
+    const photos = context.getAttachments('photo');
+    console.log(`${photos.length} photos attached`);
+  }
+  
+  // Check payload from keyboard button
+  if (context.messagePayload) {
+    const payload = JSON.parse(context.messagePayload);
+    
+    if (payload.command === 'start') {
+      await context.send('Welcome!');
+    }
+  }
+  
+  // Check if from chat
+  if (context.isChat) {
+    console.log('Chat ID:', context.chatId);
+  }
+  
+  // Reply to user
+  await context.send('Message received!');
+});
+```
+
+## Wall Post Context
+
+**Type**: `'wall_post'`
+
+**Subtypes**: `'wall_post_new'`, `'wall_repost'`
+
+```typescript
+updates.on('wall_post_new', async (context) => {
+  console.log('Post text:', context.wall.text);
+  console.log('Author:', context.wall.fromId);
+  
+  // Like the post
+  await context.like();
+  
+  // Add comment
+  await context.addComment('Great post!');
+});
+```
+
+<ParamField path="wall" type="WallAttachment">
+  Wall post attachment with full post data
+</ParamField>
+
+## Comment Context
+
+**Type**: `'comment'`
+
+**Subtypes**: `'photo_comment_new'`, `'video_comment_new'`, `'wall_reply_new'`, etc.
+
+```typescript
+updates.on(['photo_comment_new', 'video_comment_new'], (context) => {
+  console.log('Comment:', context.text);
+  console.log('Comment ID:', context.id);
+  console.log('Author:', context.fromId);
+  
+  if (context.replyToComment) {
+    console.log('Reply to:', context.replyToComment);
+  }
+});
+```
+
+## Message Event Context
+
+**Type**: `'message_event'`
+
+Handles callback button presses from inline keyboards:
+
+```typescript
+updates.on('message_event', async (context) => {
+  const payload = context.eventPayload;
+  
+  if (payload.action === 'buy') {
+    // Show snackbar notification
+    await context.showSnackbar('Purchase successful!');
+  }
+  
+  // Update message
+  await context.editMessage({
+    message: 'Button clicked!',
+    keyboard: newKeyboard
+  });
+});
+```
+
+<ParamField path="eventPayload" type="object">
+  Payload from callback button
+</ParamField>
+
+<ParamField path="conversationMessageId" type="number">
+  ID of message with the button
+</ParamField>
+
+## Group Member Context
+
+**Type**: `'group_member'`
+
+**Subtypes**: `'group_join'`, `'group_leave'`
+
+```typescript
+updates.on('group_join', async (context) => {
+  console.log('New member:', context.userId);
+  console.log('Join type:', context.joinType); // 'join', 'unsure', 'approved', 'request'
+  
+  // Send welcome message
+  await api.messages.send({
+    user_id: context.userId,
+    message: 'Welcome to our community!',
+    random_id: 0
+  });
+});
+```
+
+## Typing Context
+
+**Type**: `'typing'`
+
+**Subtypes**: `'typing_user'`, `'typing_chat'`
+
+```typescript
+updates.on('typing', (context) => {
+  if (context.isUser) {
+    console.log('User typing:', context.fromId);
+  } else {
+    console.log('User typing in chat:', context.fromId, context.chatId);
+  }
+});
+```
+
+## Available Context Types
+
+All available context classes:
+
+- `MessageContext` - Messages and chat events
+- `MessageEventContext` - Callback button events
+- `MessageSubscriptionContext` - Message allow/deny
+- `MessageFlagsContext` - Message flags (polling only)
+- `MessagesReadContext` - Messages read status
+- `WallPostContext` - Wall posts
+- `CommentContext` - Comments on media
+- `LikeContext` - Like add/remove
+- `VoteContext` - Poll votes
+- `GroupMemberContext` - Group join/leave
+- `GroupUserContext` - User block/unblock
+- `GroupUpdateContext` - Group settings changes
+- `NewAttachmentsContext` - New photos/videos/audio
+- `TypingContext` - Typing indicators
+- `DialogFlagsContext` - Dialog flags (polling only)
+- `DialogMessagesContext` - Dialog messages counter
+- `DialogNotificationSettingsContext` - Notification settings
+- `FriendActivityContext` - Friend online/offline (polling only)
+- `VKAppPayloadContext` - VK App events
+- `VKPayTransactionContext` - VK Pay transactions
+- `MarketOrderContext` - Market orders
+- `DonutSubscriptionContext` - Donut subscriptions
+- `DonutSubscriptionPriceContext` - Subscription price changes
+- `DonutWithdrawContext` - Donut money withdrawal
+- `UnsupportedEventContext` - Unknown events
+
+<Note>
+  Contexts from User Long Poll may contain incomplete data compared to Bots Long Poll or webhooks.
+</Note>
+
+## Serialization
+
+All contexts can be serialized to JSON:
+
+```typescript
+updates.on('message_new', (context) => {
+  const json = JSON.stringify(context);
+  console.log(json);
+});
+```
+
+<Tip>
+  Each context has TypeScript definitions for all properties. Use your IDE's autocomplete to explore available fields.
+</Tip>

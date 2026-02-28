@@ -1,0 +1,210 @@
+---
+title: Simple Bot
+description: Build your first VK bot with command handling and the HearManager
+---
+
+This example demonstrates how to create a simple VK bot that responds to commands using the `HearManager` from `@vk-io/hear`.
+
+## What You'll Learn
+
+- Setting up a basic VK bot
+- Using HearManager for command handling
+- Responding to text commands and regex patterns
+- Sending photos and audio messages
+- Working with different hear patterns (strings, arrays, regex)
+
+## Prerequisites
+
+<Steps>
+  <Step title="Install dependencies">
+    ```bash
+    npm install vk-io @vk-io/hear
+    ```
+  </Step>
+
+  <Step title="Get your access token">
+    Create a VK community and get an access token with message permissions.
+  </Step>
+
+  <Step title="Set environment variable">
+    ```bash
+    export TOKEN=your_vk_access_token
+    ```
+  </Step>
+</Steps>
+
+## Complete Example
+
+```javascript
+const { VK } = require('vk-io');
+const { HearManager } = require('@vk-io/hear');
+
+const vk = new VK({
+    token: process.env.TOKEN,
+});
+
+const hearManager = new HearManager();
+
+vk.updates.on('message_new', hearManager.middleware);
+
+hearManager.hear('/start', async context => {
+    await context.send(`
+        My commands list
+
+        /cat - Cat photo
+        /purr - Cat purring
+        /time - The current date
+        /reverse - Reverse text
+    `);
+});
+
+hearManager.hear('/cat', async context => {
+    await Promise.all([
+        context.send('Wait for the uploads awesome 😻'),
+
+        context.sendPhotos({
+            value: 'https://loremflickr.com/400/300/',
+        }),
+    ]);
+});
+
+hearManager.hear(['/time', '/date'], async context => {
+    await context.send(String(new Date()));
+});
+
+hearManager.hear(/^\/reverse (.+)/i, async context => {
+    await context.send(context.$match[1].split('').reverse().join(''));
+});
+
+const catsPurring = [
+    'http://ronsen.org/purrfectsounds/purrs/trip.mp3',
+    'http://ronsen.org/purrfectsounds/purrs/maja.mp3',
+    'http://ronsen.org/purrfectsounds/purrs/chicken.mp3',
+];
+
+hearManager.hear('/purr', async context => {
+    const link = catsPurring[Math.floor(Math.random() * catsPurring.length)];
+
+    await Promise.all([
+        context.send('Wait for the uploads purring 😻'),
+
+        context.sendAudioMessage({
+            value: link,
+        }),
+    ]);
+});
+
+vk.updates.start().catch(console.error);
+```
+
+## Code Breakdown
+
+### Initialize VK and HearManager
+
+```javascript
+const vk = new VK({
+    token: process.env.TOKEN,
+});
+
+const hearManager = new HearManager();
+vk.updates.on('message_new', hearManager.middleware);
+```
+
+The `HearManager` is a powerful middleware that allows you to listen for specific patterns in messages. We attach it to the `message_new` event to handle incoming messages.
+
+### Simple Text Commands
+
+```javascript
+hearManager.hear('/start', async context => {
+    await context.send(`
+        My commands list
+        /cat - Cat photo
+        /purr - Cat purring
+        /time - The current date
+        /reverse - Reverse text
+    `);
+});
+```
+
+The `/start` command sends a welcome message with available commands.
+
+### Multiple Command Aliases
+
+```javascript
+hearManager.hear(['/time', '/date'], async context => {
+    await context.send(String(new Date()));
+});
+```
+
+<Tip>
+You can pass an array of patterns to `hear()` to create command aliases. Both `/time` and `/date` will trigger the same handler.
+</Tip>
+
+### Regex Pattern Matching
+
+```javascript
+hearManager.hear(/^\/reverse (.+)/i, async context => {
+    await context.send(context.$match[1].split('').reverse().join(''));
+});
+```
+
+Regex patterns allow you to capture user input. The captured groups are available in `context.$match`. For example, `/reverse hello` would reverse the text "hello".
+
+### Sending Photos
+
+```javascript
+hearManager.hear('/cat', async context => {
+    await Promise.all([
+        context.send('Wait for the uploads awesome 😻'),
+        context.sendPhotos({
+            value: 'https://loremflickr.com/400/300/',
+        }),
+    ]);
+});
+```
+
+<Note>
+Using `Promise.all()` allows you to send multiple messages concurrently, improving response time.
+</Note>
+
+### Sending Audio Messages
+
+```javascript
+const catsPurring = [
+    'http://ronsen.org/purrfectsounds/purrs/trip.mp3',
+    'http://ronsen.org/purrfectsounds/purrs/maja.mp3',
+    'http://ronsen.org/purrfectsounds/purrs/chicken.mp3',
+];
+
+hearManager.hear('/purr', async context => {
+    const link = catsPurring[Math.floor(Math.random() * catsPurring.length)];
+
+    await Promise.all([
+        context.send('Wait for the uploads purring 😻'),
+        context.sendAudioMessage({
+            value: link,
+        }),
+    ]);
+});
+```
+
+This example shows how to send audio messages from URLs. The bot randomly selects one of three cat purring sounds.
+
+## Running the Bot
+
+```bash
+node simple-bot.js
+```
+
+Once running, send messages to your VK community:
+- `/start` - See the commands list
+- `/cat` - Get a random cat photo
+- `/purr` - Get a cat purring audio
+- `/time` or `/date` - Get the current date
+- `/reverse hello world` - Reverse any text
+
+## Next Steps
+
+- Learn how to add [keyboards](/examples/keyboard-bot) to your bot
+- Explore [file upload](/examples/file-upload) capabilities
+- Check out the [HearManager documentation](/ecosystem/hear) for advanced patterns

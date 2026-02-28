@@ -1,0 +1,567 @@
+---
+title: Error Classes
+description: VK-IO error types and error handling
+icon: triangle-exclamation
+---
+
+VK-IO provides a comprehensive error system with specific error classes for different failure scenarios. All errors extend from the base `VKError` class.
+
+## VKError
+
+Base error class for all VK-IO errors.
+
+```typescript
+import { VKError } from 'vk-io';
+
+try {
+  // Some operation
+} catch (error) {
+  if (error instanceof VKError) {
+    console.error(`Error ${error.code}: ${error.message}`);
+  }
+}
+```
+
+### Properties
+
+<ResponseField name="code" type="string | number" required>
+  Error code identifier.
+</ResponseField>
+
+<ResponseField name="message" type="string" required>
+  Human-readable error message.
+</ResponseField>
+
+<ResponseField name="stack" type="string">
+  Stack trace of the error.
+</ResponseField>
+
+<ResponseField name="cause" type="Error">
+  Original error that caused this error (if applicable).
+</ResponseField>
+
+### Constructor
+
+<ParamField path="options" type="object" required>
+  Error configuration object.
+  <Expandable title="properties">
+    <ResponseField name="code" type="string | number" required>
+      Error code.
+    </ResponseField>
+    <ResponseField name="message" type="string" required>
+      Error message.
+    </ResponseField>
+    <ResponseField name="cause" type="Error">
+      Underlying error.
+    </ResponseField>
+  </Expandable>
+</ParamField>
+
+## APIError
+
+Thrown when VK API returns an error response.
+
+```typescript
+import { APIError, APIErrorCode } from 'vk-io';
+
+try {
+  await vk.api.messages.send({
+    peer_id: 123,
+    message: 'Hello!',
+    random_id: 0
+  });
+} catch (error) {
+  if (error instanceof APIError) {
+    console.log(`API Error ${error.code}: ${error.message}`);
+    
+    if (error.code === APIErrorCode.CAPTCHA) {
+      console.log('Captcha required:', error.captchaImg);
+    }
+  }
+}
+```
+
+### Properties
+
+<ResponseField name="code" type="number" required>
+  VK API error code (see APIErrorCode enum).
+</ResponseField>
+
+<ResponseField name="message" type="string" required>
+  Error message in format: `Code №{code} - {error_msg}`.
+</ResponseField>
+
+<ResponseField name="params" type="IAPIErrorParam[]" required>
+  Request parameters that were sent.
+  <Expandable title="structure">
+    <ResponseField name="key" type="string">
+      Parameter name.
+    </ResponseField>
+    <ResponseField name="value" type="string">
+      Parameter value.
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+<ResponseField name="captchaSid" type="string">
+  Captcha session ID (when code is 14).
+</ResponseField>
+
+<ResponseField name="captchaImg" type="string">
+  URL to captcha image (when code is 14).
+</ResponseField>
+
+<ResponseField name="redirectUri" type="string">
+  Redirect URI for validation (when code is 17) or captcha.
+</ResponseField>
+
+<ResponseField name="confirmationText" type="string">
+  Text that needs confirmation (when code is 24).
+</ResponseField>
+
+## ExecuteError
+
+Thrown when an error occurs within VK's execute method.
+
+```typescript
+import { ExecuteError } from 'vk-io';
+
+const chain = vk.api.chain();
+chain.append('users.get', { user_ids: 1 });
+chain.append('invalid.method', {});
+
+try {
+  await chain.run();
+} catch (error) {
+  if (error instanceof ExecuteError) {
+    console.log('Method failed:', error.method);
+    console.log('Error code:', error.code);
+  }
+}
+```
+
+### Properties
+
+<ResponseField name="method" type="string" required>
+  The API method that failed during execution.
+</ResponseField>
+
+<ResponseField name="code" type="number" required>
+  VK API error code.
+</ResponseField>
+
+<ResponseField name="message" type="string" required>
+  Error message.
+</ResponseField>
+
+## CollectError
+
+Thrown when collect iterator encounters errors.
+
+```typescript
+import { CollectError, CollectErrorCode } from 'vk-io';
+import { createCollectIterator } from 'vk-io';
+
+try {
+  const iterator = createCollectIterator({
+    api: vk.api,
+    method: 'wall.get',
+    params: { owner_id: 1 },
+    countPerRequest: 100
+  });
+  
+  for await (const data of iterator) {
+    // Process data
+  }
+} catch (error) {
+  if (error instanceof CollectError) {
+    console.log('Collect error:', error.code);
+    console.log('Execute errors:', error.errors);
+  }
+}
+```
+
+### Properties
+
+<ResponseField name="code" type="string" required>
+  Error code (typically `'EXECUTE_ERROR'`).
+</ResponseField>
+
+<ResponseField name="message" type="string" required>
+  Error message.
+</ResponseField>
+
+<ResponseField name="errors" type="ExecuteError[]" required>
+  Array of errors that occurred during execute batch.
+</ResponseField>
+
+## UploadError
+
+Thrown when file upload fails.
+
+```typescript
+import { UploadError, UploadErrorCode } from 'vk-io';
+
+try {
+  await vk.upload.messagePhoto({
+    peer_id: 123,
+    source: './invalid-file.jpg'
+  });
+} catch (error) {
+  if (error instanceof UploadError) {
+    switch (error.code) {
+      case UploadErrorCode.MISSING_PARAMETERS:
+        console.log('Missing required parameters');
+        break;
+      case UploadErrorCode.NO_FILES_TO_UPLOAD:
+        console.log('No files provided');
+        break;
+      case UploadErrorCode.EXCEEDED_MAX_FILES:
+        console.log('Too many files');
+        break;
+      case UploadErrorCode.UNSUPPORTED_SOURCE_TYPE:
+        console.log('Invalid file source');
+        break;
+    }
+  }
+}
+```
+
+### Error Codes
+
+- `MISSING_PARAMETERS` - Required parameters not provided
+- `NO_FILES_TO_UPLOAD` - No files in upload request
+- `EXCEEDED_MAX_FILES` - Too many files for this upload type
+- `UNSUPPORTED_SOURCE_TYPE` - Invalid source type
+
+## UpdatesError
+
+Thrown when updates polling or webhook handling fails.
+
+```typescript
+import { UpdatesError, UpdatesErrorCode } from 'vk-io';
+
+vk.updates.on('error', (error) => {
+  if (error instanceof UpdatesError) {
+    if (error.code === UpdatesErrorCode.NEED_RESTART) {
+      console.log('Updates need restart');
+      vk.updates.start().catch(console.error);
+    } else if (error.code === UpdatesErrorCode.POLLING_REQUEST_FAILED) {
+      console.log('Polling request failed');
+    }
+  }
+});
+```
+
+### Error Codes
+
+- `NEED_RESTART` - Updates service needs to be restarted
+- `POLLING_REQUEST_FAILED` - Long polling request failed
+
+## ResourceError
+
+Thrown when parsing VK resource URLs fails.
+
+```typescript
+import { ResourceError, ResourceErrorCode } from 'vk-io';
+import { resolveResource } from 'vk-io';
+
+try {
+  const resource = await resolveResource({
+    api: vk.api,
+    resource: 'https://vk.com/invalid_url'
+  });
+} catch (error) {
+  if (error instanceof ResourceError) {
+    switch (error.code) {
+      case ResourceErrorCode.INVALID_URL:
+        console.log('Invalid VK URL');
+        break;
+      case ResourceErrorCode.INVALID_RESOURCE:
+        console.log('Invalid resource type');
+        break;
+      case ResourceErrorCode.RESOURCE_NOT_FOUND:
+        console.log('Resource not found');
+        break;
+    }
+  }
+}
+```
+
+### Error Codes
+
+- `INVALID_URL` - URL format is invalid
+- `INVALID_RESOURCE` - Resource type is not recognized
+- `RESOURCE_NOT_FOUND` - Resource does not exist
+
+## API Error Codes
+
+Common VK API error codes (from `APIErrorCode` enum):
+
+### Authentication Errors
+
+<CodeGroup>
+```typescript User Auth Failed (5)
+APIErrorCode.AUTH
+// User authorization failed
+```
+
+```typescript Token Expired (1117)
+APIErrorCode.AUTH_ACCESS_TOKEN_HAS_EXPIRED
+// Access token has expired
+```
+
+```typescript Validation Required (17)
+APIErrorCode.AUTH_VALIDATION
+// User needs to complete validation
+```
+</CodeGroup>
+
+### Rate Limiting
+
+<CodeGroup>
+```typescript Too Many Requests (6)
+APIErrorCode.TOO_MANY
+// Too many requests per second
+```
+
+```typescript Flood Control (9)
+APIErrorCode.FLOOD
+// Flood control triggered
+```
+
+```typescript Rate Limit (29)
+APIErrorCode.RATE_LIMIT
+// Rate limit reached
+```
+</CodeGroup>
+
+### Captcha & Security
+
+<CodeGroup>
+```typescript Captcha Needed (14)
+APIErrorCode.CAPTCHA
+// Captcha verification required
+// Check error.captchaSid and error.captchaImg
+```
+
+```typescript Need Confirmation (24)
+APIErrorCode.NEED_CONFIRMATION
+// Action needs user confirmation
+// Check error.confirmationText
+```
+</CodeGroup>
+
+### Permission Errors
+
+<CodeGroup>
+```typescript Access Denied (15)
+APIErrorCode.ACCESS
+// Access denied to resource
+```
+
+```typescript Permission Denied (7)
+APIErrorCode.PERMISSION
+// Insufficient permissions for action
+```
+</CodeGroup>
+
+### Parameter Errors
+
+<CodeGroup>
+```typescript Invalid Parameter (100)
+APIErrorCode.PARAM
+// One of parameters is invalid
+```
+
+```typescript Not Found (104)
+APIErrorCode.NOT_FOUND
+// Requested resource not found
+```
+</CodeGroup>
+
+### Message Errors
+
+<CodeGroup>
+```typescript User Blocked (900)
+APIErrorCode.MESSAGES_USER_BLOCKED
+// Can't send message - user in blacklist
+```
+
+```typescript Deny Send (901)
+APIErrorCode.MESSAGES_DENY_SEND
+// Can't send without permission
+```
+
+```typescript Privacy (902)
+APIErrorCode.MESSAGES_PRIVACY
+// Blocked by privacy settings
+```
+
+```typescript Chat Not Admin (925)
+APIErrorCode.MESSAGES_CHAT_NOT_ADMIN
+// User is not admin of chat
+```
+</CodeGroup>
+
+## Error Handling Patterns
+
+### Handle Specific API Errors
+
+```typescript
+import { APIError, APIErrorCode } from 'vk-io';
+
+const sendMessage = async (peerId: number, message: string) => {
+  try {
+    return await vk.api.messages.send({
+      peer_id: peerId,
+      message,
+      random_id: 0
+    });
+  } catch (error) {
+    if (error instanceof APIError) {
+      switch (error.code) {
+        case APIErrorCode.MESSAGES_USER_BLOCKED:
+          console.log('User blocked bot');
+          break;
+        case APIErrorCode.MESSAGES_PRIVACY:
+          console.log('Privacy settings prevent messaging');
+          break;
+        case APIErrorCode.CAPTCHA:
+          console.log('Captcha required:', error.captchaImg);
+          // Handle captcha
+          break;
+        default:
+          console.error('API Error:', error.message);
+      }
+    }
+    throw error;
+  }
+};
+```
+
+### Retry with Exponential Backoff
+
+```typescript
+import { APIError, APIErrorCode } from 'vk-io';
+import { delay } from 'vk-io';
+
+const retryableErrors = [
+  APIErrorCode.TOO_MANY,
+  APIErrorCode.FLOOD,
+  APIErrorCode.RATE_LIMIT
+];
+
+const callWithRetry = async (fn: () => Promise<any>, maxRetries = 3) => {
+  for (let i = 0; i < maxRetries; i++) {
+    try {
+      return await fn();
+    } catch (error) {
+      if (error instanceof APIError && retryableErrors.includes(error.code)) {
+        if (i < maxRetries - 1) {
+          const delayMs = 1000 * Math.pow(2, i);
+          console.log(`Rate limited, retrying in ${delayMs}ms...`);
+          await delay(delayMs);
+          continue;
+        }
+      }
+      throw error;
+    }
+  }
+};
+
+const users = await callWithRetry(() => 
+  vk.api.users.get({ user_ids: [1, 2, 3] })
+);
+```
+
+### Global Error Handler
+
+```typescript
+import { VKError, APIError, UploadError, UpdatesError } from 'vk-io';
+
+const handleError = (error: unknown) => {
+  if (error instanceof APIError) {
+    console.error('API Error:', {
+      code: error.code,
+      message: error.message,
+      params: error.params
+    });
+  } else if (error instanceof UploadError) {
+    console.error('Upload Error:', {
+      code: error.code,
+      message: error.message
+    });
+  } else if (error instanceof UpdatesError) {
+    console.error('Updates Error:', {
+      code: error.code,
+      message: error.message
+    });
+  } else if (error instanceof VKError) {
+    console.error('VK Error:', {
+      code: error.code,
+      message: error.message,
+      cause: error.cause
+    });
+  } else {
+    console.error('Unknown error:', error);
+  }
+};
+
+vk.updates.on('error', handleError);
+
+try {
+  await vk.api.messages.send({ ... });
+} catch (error) {
+  handleError(error);
+}
+```
+
+### Type Guards
+
+```typescript
+import { APIError, UploadError, VKError } from 'vk-io';
+
+const isAPIError = (error: unknown): error is APIError => {
+  return error instanceof APIError;
+};
+
+const isUploadError = (error: unknown): error is UploadError => {
+  return error instanceof UploadError;
+};
+
+const isVKError = (error: unknown): error is VKError => {
+  return error instanceof VKError;
+};
+
+try {
+  await someOperation();
+} catch (error) {
+  if (isAPIError(error)) {
+    // TypeScript knows error is APIError
+    console.log(error.params);
+  } else if (isVKError(error)) {
+    // TypeScript knows error is VKError
+    console.log(error.code);
+  }
+}
+```
+
+## Error Code Enums
+
+VK-IO exports error code enums for type-safe error handling:
+
+```typescript
+import {
+  APIErrorCode,
+  CollectErrorCode,
+  ResourceErrorCode,
+  SharedErrorCode,
+  UpdatesErrorCode,
+  UploadErrorCode
+} from 'vk-io';
+```
+
+<Card title="View Full API Error Codes" icon="list" href="https://dev.vk.com/reference/errors">
+  See VK's official documentation for the complete list of API error codes and their meanings.
+</Card>

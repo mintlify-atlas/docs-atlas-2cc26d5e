@@ -1,0 +1,504 @@
+---
+title: 'Keyboard'
+description: 'Keyboard and KeyboardBuilder API reference for creating interactive VK keyboards'
+---
+
+# Keyboard
+
+The Keyboard API allows you to create interactive keyboards with various button types for VK messages. Use `Keyboard` for static button definitions and `KeyboardBuilder` for dynamic keyboard construction.
+
+## Keyboard Class
+
+Static methods for creating keyboards and buttons.
+
+### Static Methods
+
+#### builder()
+
+Returns a new KeyboardBuilder instance for constructing keyboards.
+
+```typescript
+const keyboard = Keyboard.builder()
+  .textButton({ label: 'Start' })
+  .row()
+  .textButton({ label: 'Help' });
+```
+
+**Returns:** `KeyboardBuilder`
+
+#### keyboard(rows)
+
+Assembles a keyboard from an array of button rows.
+
+<ParamField path="rows" type="(IKeyboardProxyButton | IKeyboardProxyButton[])[]" required>
+  Array of button rows. Each row can be a single button or an array of buttons.
+</ParamField>
+
+```typescript
+const keyboard = Keyboard.keyboard([
+  Keyboard.textButton({ label: 'Option 1' }),
+  [Keyboard.textButton({ label: 'A' }), Keyboard.textButton({ label: 'B' })],
+]);
+```
+
+**Returns:** `KeyboardBuilder`
+
+### Button Factory Methods
+
+#### textButton(options)
+
+Creates a text button that can be colored.
+
+<ParamField path="options" type="IKeyboardTextButtonOptions" required>
+  Configuration for the text button
+</ParamField>
+
+<Expandable title="IKeyboardTextButtonOptions">
+  <ResponseField name="label" type="string" required>
+    Button label (max 40 characters)
+  </ResponseField>
+  <ResponseField name="color" type="ButtonColor | ButtonColorUnion">
+    Button color (default: SECONDARY_COLOR)
+  </ResponseField>
+  <ResponseField name="payload" type="ButtonPayload">
+    Custom data payload (max 255 characters when stringified)
+  </ResponseField>
+</Expandable>
+
+```typescript
+const button = Keyboard.textButton({
+  label: 'Buy Coffee',
+  payload: { command: 'buy', item: 'coffee' },
+  color: Keyboard.POSITIVE_COLOR,
+});
+```
+
+#### urlButton(options)
+
+Creates a URL button that opens a link.
+
+<ParamField path="options" type="IKeyboardURLButtonOptions" required>
+  Configuration for the URL button
+</ParamField>
+
+<Expandable title="IKeyboardURLButtonOptions">
+  <ResponseField name="label" type="string" required>
+    Button label (max 40 characters)
+  </ResponseField>
+  <ResponseField name="url" type="string" required>
+    The URL to open when clicked
+  </ResponseField>
+  <ResponseField name="payload" type="ButtonPayload">
+    Custom data payload (max 255 characters when stringified)
+  </ResponseField>
+</Expandable>
+
+```typescript
+const button = Keyboard.urlButton({
+  label: 'Visit Site',
+  url: 'https://example.com',
+});
+```
+
+#### locationRequestButton(options)
+
+Creates a button that requests user location. Occupies the entire keyboard width.
+
+<ParamField path="options" type="IKeyboardLocationRequestButtonOptions" required>
+  Configuration for the location button
+</ParamField>
+
+<Expandable title="IKeyboardLocationRequestButtonOptions">
+  <ResponseField name="payload" type="ButtonPayload">
+    Custom data payload (max 255 characters when stringified)
+  </ResponseField>
+</Expandable>
+
+```typescript
+const button = Keyboard.locationRequestButton({
+  payload: { command: 'order_delivery' },
+});
+```
+
+#### payButton(options)
+
+Creates a VK Pay button. Occupies the entire keyboard width.
+
+<ParamField path="options" type="IKeyboardVKPayButtonOptions" required>
+  Configuration for the VK Pay button
+</ParamField>
+
+<Expandable title="IKeyboardVKPayButtonOptions">
+  <ResponseField name="payload" type="ButtonPayload" required>
+    Custom data payload
+  </ResponseField>
+  <ResponseField name="hash" type="KeyboardVKPayHash | string" required>
+    Payment parameters or hash string
+  </ResponseField>
+</Expandable>
+
+```typescript
+const button = Keyboard.payButton({
+  payload: {},
+  hash: {
+    action: 'transfer-to-group',
+    group_id: 1,
+    aid: 10,
+  },
+});
+```
+
+#### applicationButton(options)
+
+Creates a VK Apps button. Occupies the entire keyboard width.
+
+<ParamField path="options" type="IKeyboardApplicationButtonOptions" required>
+  Configuration for the VK Apps button
+</ParamField>
+
+<Expandable title="IKeyboardApplicationButtonOptions">
+  <ResponseField name="label" type="string" required>
+    Button label (max 40 characters)
+  </ResponseField>
+  <ResponseField name="appId" type="number" required>
+    VK Apps application identifier
+  </ResponseField>
+  <ResponseField name="ownerId" type="number">
+    Community ID where the app is installed
+  </ResponseField>
+  <ResponseField name="hash" type="string">
+    Navigation hash for the application
+  </ResponseField>
+</Expandable>
+
+```typescript
+const button = Keyboard.applicationButton({
+  label: 'Open App',
+  appId: 6232540,
+  ownerId: -157525928,
+});
+```
+
+#### callbackButton(options)
+
+Creates a callback button that triggers events without sending a message.
+
+<ParamField path="options" type="IKeyboardCallbackButtonOptions" required>
+  Configuration for the callback button
+</ParamField>
+
+<Expandable title="IKeyboardCallbackButtonOptions">
+  <ResponseField name="label" type="string" required>
+    Button label (max 40 characters)
+  </ResponseField>
+  <ResponseField name="color" type="ButtonColor | ButtonColorUnion">
+    Button color (default: SECONDARY_COLOR)
+  </ResponseField>
+  <ResponseField name="payload" type="ButtonPayload">
+    Custom data payload (max 255 characters when stringified)
+  </ResponseField>
+</Expandable>
+
+```typescript
+const button = Keyboard.callbackButton({
+  label: 'Like',
+  payload: { action: 'like', id: 123 },
+  color: Keyboard.PRIMARY_COLOR,
+});
+```
+
+### Button Colors
+
+Button color constants for text and callback buttons.
+
+<ResponseField name="SECONDARY_COLOR" type="ButtonColor.SECONDARY">
+  White button (#FFFFFF) - indicates secondary action
+</ResponseField>
+
+<ResponseField name="PRIMARY_COLOR" type="ButtonColor.PRIMARY">
+  Blue button (#5181B8) - indicates main action
+</ResponseField>
+
+<ResponseField name="NEGATIVE_COLOR" type="ButtonColor.NEGATIVE">
+  Red button (#E64646) - indicates dangerous/negative action
+</ResponseField>
+
+<ResponseField name="POSITIVE_COLOR" type="ButtonColor.POSITIVE">
+  Green button (#4BB34B) - indicates agreement/confirmation
+</ResponseField>
+
+---
+
+## KeyboardBuilder Class
+
+Builder class for constructing keyboards with a fluent API.
+
+### Properties
+
+<ResponseField name="isOneTime" type="boolean">
+  Whether the keyboard closes after pressing a button (default: false)
+</ResponseField>
+
+<ResponseField name="isInline" type="boolean">
+  Whether the keyboard is attached inline to the message (default: false)
+</ResponseField>
+
+### Methods
+
+#### textButton(options)
+
+Adds a text button to the current row.
+
+<ParamField path="options" type="IKeyboardTextButtonOptions" required>
+  Button configuration (same as Keyboard.textButton)
+</ParamField>
+
+```typescript
+builder.textButton({
+  label: 'Buy Coffee',
+  payload: { command: 'buy', item: 'coffee' },
+  color: Keyboard.POSITIVE_COLOR,
+});
+```
+
+**Returns:** `this` (for chaining)
+
+#### urlButton(options)
+
+Adds a URL button. May create a new row if current row has 2+ buttons.
+
+<ParamField path="options" type="IKeyboardURLButtonOptions" required>
+  Button configuration
+</ParamField>
+
+**Returns:** `this` (for chaining)
+
+#### locationRequestButton(options)
+
+Adds a location request button. May create a new row if current row has 2+ buttons.
+
+<ParamField path="options" type="IKeyboardLocationRequestButtonOptions" required>
+  Button configuration
+</ParamField>
+
+**Returns:** `this` (for chaining)
+
+#### payButton(options)
+
+Adds a VK Pay button. May create a new row if current row has 2+ buttons.
+
+<ParamField path="options" type="IKeyboardVKPayButtonOptions" required>
+  Button configuration
+</ParamField>
+
+**Returns:** `this` (for chaining)
+
+#### applicationButton(options)
+
+Adds a VK Apps button. May create a new row if current row has 2+ buttons.
+
+<ParamField path="options" type="IKeyboardApplicationButtonOptions" required>
+  Button configuration
+</ParamField>
+
+**Returns:** `this` (for chaining)
+
+#### callbackButton(options)
+
+Adds a callback button to the current row.
+
+<ParamField path="options" type="IKeyboardCallbackButtonOptions" required>
+  Button configuration
+</ParamField>
+
+**Returns:** `this` (for chaining)
+
+#### row()
+
+Saves the current row and starts a new row.
+
+```typescript
+builder
+  .textButton({ label: 'Button 1' })
+  .textButton({ label: 'Button 2' })
+  .row()
+  .textButton({ label: 'Button 3' });
+```
+
+**Returns:** `this` (for chaining)
+
+**Note:** Maximum 5 buttons per row.
+
+#### oneTime(enabled)
+
+Sets whether the keyboard closes after a button press.
+
+<ParamField path="enabled" type="boolean" default="true">
+  Enable one-time mode
+</ParamField>
+
+```typescript
+builder.oneTime(); // Enable
+builder.oneTime(false); // Disable
+```
+
+**Returns:** `this` (for chaining)
+
+#### inline(enabled)
+
+Sets whether the keyboard is inline.
+
+<ParamField path="enabled" type="boolean" default="true">
+  Enable inline mode
+</ParamField>
+
+```typescript
+builder.inline(); // Enable
+builder.inline(false); // Disable
+```
+
+**Returns:** `this` (for chaining)
+
+**Note:** Inline keyboards have a maximum of 6 rows, regular keyboards have 10.
+
+#### clone()
+
+Clones the builder with all settings and buttons.
+
+```typescript
+const clone = builder.clone();
+```
+
+**Returns:** `KeyboardBuilder`
+
+#### toString()
+
+Returns the JSON string representation for the VK API.
+
+```typescript
+const keyboardJson = builder.toString();
+```
+
+**Returns:** `string`
+
+## Usage Examples
+
+### Simple Keyboard
+
+```typescript
+const keyboard = Keyboard.builder()
+  .textButton({ label: 'Start', color: Keyboard.POSITIVE_COLOR })
+  .row()
+  .textButton({ label: 'Help' })
+  .toString();
+
+await vk.api.messages.send({
+  peer_id: userId,
+  message: 'Welcome!',
+  keyboard,
+});
+```
+
+### Multi-Row Keyboard with Callbacks
+
+```typescript
+const keyboard = Keyboard.builder()
+  .callbackButton({
+    label: 'Like',
+    payload: { action: 'like' },
+    color: Keyboard.PRIMARY_COLOR,
+  })
+  .callbackButton({
+    label: 'Dislike',
+    payload: { action: 'dislike' },
+    color: Keyboard.NEGATIVE_COLOR,
+  })
+  .row()
+  .urlButton({ label: 'Website', url: 'https://example.com' })
+  .inline()
+  .toString();
+```
+
+### One-Time Keyboard
+
+```typescript
+const keyboard = Keyboard.builder()
+  .textButton({ label: 'Yes', color: Keyboard.POSITIVE_COLOR })
+  .textButton({ label: 'No', color: Keyboard.NEGATIVE_COLOR })
+  .oneTime()
+  .toString();
+```
+
+### Using Static keyboard() Method
+
+```typescript
+const keyboard = Keyboard.keyboard([
+  Keyboard.textButton({ label: 'Option 1' }),
+  [
+    Keyboard.textButton({ label: 'A' }),
+    Keyboard.textButton({ label: 'B' }),
+    Keyboard.textButton({ label: 'C' }),
+  ],
+  Keyboard.urlButton({ label: 'More Info', url: 'https://example.com' }),
+]).toString();
+```
+
+## Type Definitions
+
+### ButtonColor
+
+```typescript
+enum ButtonColor {
+  SECONDARY = 'secondary',
+  PRIMARY = 'primary',
+  NEGATIVE = 'negative',
+  POSITIVE = 'positive',
+}
+```
+
+### ButtonPayload
+
+```typescript
+type ButtonPayload = object | string;
+```
+
+Payload must not exceed 255 characters when JSON stringified.
+
+### VK Pay Hash Types
+
+<Expandable title="IVKPayPayToGroup">
+  <ResponseField name="action" type="'pay-to-group'" required />
+  <ResponseField name="group_id" type="number" required>
+    Group ID to receive payment
+  </ResponseField>
+  <ResponseField name="amount" type="number" required>
+    Payment amount in rubles (minimum 1)
+  </ResponseField>
+  <ResponseField name="description" type="string">
+    Payment description
+  </ResponseField>
+  <ResponseField name="data" type="string">
+    Arbitrary payload
+  </ResponseField>
+  <ResponseField name="aid" type="string | number" required>
+    Application ID
+  </ResponseField>
+</Expandable>
+
+<Expandable title="IVKPayTransferToGroup">
+  <ResponseField name="action" type="'transfer-to-group'" required />
+  <ResponseField name="group_id" type="number" required>
+    Group ID to receive transfer
+  </ResponseField>
+  <ResponseField name="aid" type="string | number" required>
+    Application ID
+  </ResponseField>
+</Expandable>
+
+## Constraints
+
+- Maximum label length: 40 characters
+- Maximum payload size: 255 characters (JSON stringified)
+- Maximum buttons per row: 5
+- Maximum rows for inline keyboards: 6
+- Maximum rows for regular keyboards: 10

@@ -1,0 +1,373 @@
+---
+title: Bot with Keyboard
+description: Create interactive VK bots with buttons and keyboard navigation
+---
+
+This example demonstrates how to create a VK bot with interactive keyboards using the `Keyboard` builder. You'll learn how to create buttons with payloads and handle button clicks.
+
+## What You'll Learn
+
+- Building keyboards with the Keyboard builder
+- Creating text buttons with payloads
+- Organizing buttons into rows
+- Styling buttons with colors
+- Handling button clicks via payloads
+- Creating custom command wrappers
+
+## Prerequisites
+
+<Steps>
+  <Step title="Install dependencies">
+    ```bash
+    npm install vk-io @vk-io/hear
+    ```
+  </Step>
+
+  <Step title="Set up your access token">
+    ```bash
+    export TOKEN=your_vk_access_token
+    ```
+  </Step>
+</Steps>
+
+## Complete Example
+
+```javascript
+const { VK, Keyboard } = require('vk-io');
+const { HearManager } = require('@vk-io/hear');
+
+const vk = new VK({
+    token: process.env.TOKEN,
+});
+
+const hearManager = new HearManager();
+
+// Extract command from button payload
+vk.updates.on('message_new', (context, next) => {
+    const { messagePayload } = context;
+
+    context.state.command = messagePayload?.command || null;
+
+    return next();
+});
+
+vk.updates.on('message_new', hearManager.middleware);
+
+// Simple wrapper for commands
+const hearCommand = (name, conditions, handle) => {
+    if (typeof handle !== 'function') {
+        handle = conditions;
+        conditions = [`/${name}`];
+    }
+
+    if (!Array.isArray(conditions)) {
+        conditions = [conditions];
+    }
+
+    hearManager.hear([(_text, { state }) => state.command === name, ...conditions], handle);
+};
+
+// Handle start button
+hearCommand('start', (context, next) => {
+    context.state.command = 'help';
+
+    return Promise.all([
+        context.send('Hello!'),
+
+        next(),
+    ]);
+});
+
+hearCommand('help', async context => {
+    await context.send({
+        message: `
+            My commands list
+
+            /help - The help
+            /time - The current date
+            /cat - Cat photo
+            /purr - Cat purring
+        `,
+        keyboard: Keyboard.builder()
+            .textButton({
+                label: 'The help',
+                payload: {
+                    command: 'help',
+                },
+            })
+            .row()
+            .textButton({
+                label: 'The current date',
+                payload: {
+                    command: 'time',
+                },
+            })
+            .row()
+            .textButton({
+                label: 'Cat photo',
+                payload: {
+                    command: 'cat',
+                },
+                color: Keyboard.PRIMARY_COLOR,
+            })
+            .textButton({
+                label: 'Cat purring',
+                payload: {
+                    command: 'purr',
+                },
+                color: Keyboard.PRIMARY_COLOR,
+            }),
+    });
+});
+
+hearCommand('cat', async context => {
+    await Promise.all([
+        context.send('Wait for the uploads awesome 😻'),
+
+        context.sendPhotos({
+            value: 'https://loremflickr.com/400/300/',
+        }),
+    ]);
+});
+
+hearCommand('time', ['/time', '/date'], async context => {
+    await context.send(String(new Date()));
+});
+
+const catsPurring = [
+    'http://ronsen.org/purrfectsounds/purrs/trip.mp3',
+    'http://ronsen.org/purrfectsounds/purrs/maja.mp3',
+    'http://ronsen.org/purrfectsounds/purrs/chicken.mp3',
+];
+
+hearCommand('purr', async context => {
+    const link = catsPurring[Math.floor(Math.random() * catsPurring.length)];
+
+    await Promise.all([
+        context.send('Wait for the uploads purring 😻'),
+
+        context.sendAudioMessage({
+            value: link,
+        }),
+    ]);
+});
+
+vk.updates.start().catch(console.error);
+```
+
+## Code Breakdown
+
+### Extracting Payload Commands
+
+```javascript
+vk.updates.on('message_new', (context, next) => {
+    const { messagePayload } = context;
+
+    context.state.command = messagePayload?.command || null;
+
+    return next();
+});
+```
+
+This middleware extracts the `command` from button payloads and stores it in `context.state`. This allows you to handle both text commands (like `/help`) and button clicks with the same handler.
+
+<Tip>
+Button payloads are automatically parsed as JSON objects. You can access them via `context.messagePayload`.
+</Tip>
+
+### Custom Command Wrapper
+
+```javascript
+const hearCommand = (name, conditions, handle) => {
+    if (typeof handle !== 'function') {
+        handle = conditions;
+        conditions = [`/${name}`];
+    }
+
+    if (!Array.isArray(conditions)) {
+        conditions = [conditions];
+    }
+
+    hearManager.hear([(_text, { state }) => state.command === name, ...conditions], handle);
+};
+```
+
+This helper function simplifies command handling by:
+1. Checking if the payload command matches
+2. Checking if the text command matches
+3. Supporting multiple command aliases
+
+### Building Keyboards
+
+```javascript
+Keyboard.builder()
+    .textButton({
+        label: 'The help',
+        payload: {
+            command: 'help',
+        },
+    })
+    .row()
+    .textButton({
+        label: 'The current date',
+        payload: {
+            command: 'time',
+        },
+    })
+    .row()
+    .textButton({
+        label: 'Cat photo',
+        payload: {
+            command: 'cat',
+        },
+        color: Keyboard.PRIMARY_COLOR,
+    })
+    .textButton({
+        label: 'Cat purring',
+        payload: {
+            command: 'purr',
+        },
+        color: Keyboard.PRIMARY_COLOR,
+    })
+```
+
+The `Keyboard.builder()` provides a fluent API for creating keyboards:
+- `.textButton()` - Adds a text button
+- `.row()` - Starts a new row of buttons
+- `payload` - Data sent when button is clicked
+- `color` - Button color (PRIMARY_COLOR, SECONDARY_COLOR, NEGATIVE_COLOR, POSITIVE_COLOR)
+
+<Note>
+Buttons in the same row (before calling `.row()`) will be displayed horizontally. Each row can contain up to 5 buttons.
+</Note>
+
+### Button Colors
+
+VK-IO provides predefined color constants:
+
+<CodeGroup>
+```javascript Primary (Blue)
+Keyboard.PRIMARY_COLOR
+```
+
+```javascript Secondary (White)
+Keyboard.SECONDARY_COLOR
+```
+
+```javascript Negative (Red)
+Keyboard.NEGATIVE_COLOR
+```
+
+```javascript Positive (Green)
+Keyboard.POSITIVE_COLOR
+```
+</CodeGroup>
+
+### Advanced: Keyboard Builder Cloning
+
+You can clone keyboards to create variations:
+
+```javascript
+const { Keyboard } = require('vk-io');
+
+const baseBuilder = Keyboard.builder();
+
+const userIsNotRegistered = true;
+
+if (userIsNotRegistered) {
+    baseBuilder.textButton({
+        label: 'Sign Up',
+        payload: {
+            command: 'sign_up',
+        },
+    });
+}
+
+const shopBuilder = baseBuilder.clone();
+
+shopBuilder
+    .textButton({
+        label: 'Buy a coffee',
+        payload: {
+            command: 'buy',
+            item: 'coffee',
+        },
+    })
+    .textButton({
+        label: 'Buy a tea',
+        payload: {
+            command: 'buy',
+            item: 'tea',
+        },
+    })
+    .row()
+    .textButton({
+        label: 'Go back',
+        payload: {
+            command: 'go_back',
+        },
+    });
+```
+
+<Tip>
+Use `.clone()` to create keyboard variations based on user state. This is useful for conditional buttons like login/logout or different menu options.
+</Tip>
+
+## Keyboard Types
+
+VK-IO supports different keyboard types:
+
+### Text Buttons
+```javascript
+.textButton({
+    label: 'Click me',
+    payload: { action: 'click' },
+    color: Keyboard.PRIMARY_COLOR,
+})
+```
+
+### URL Buttons
+```javascript
+.urlButton({
+    label: 'Open website',
+    url: 'https://example.com',
+})
+```
+
+### Location Button
+```javascript
+.locationRequestButton({
+    payload: { request: 'location' },
+})
+```
+
+### VK Pay Button
+```javascript
+.payButton({
+    hash: 'payment_hash',
+})
+```
+
+### VK Apps Button
+```javascript
+.applicationButton({
+    label: 'Open app',
+    appId: 123456,
+    ownerId: -123456,
+    hash: 'app_hash',
+})
+```
+
+## Running the Bot
+
+```bash
+node keyboard-bot.js
+```
+
+Once running, send `/help` or `/start` to your VK community to see the interactive keyboard. Click the buttons to interact with your bot!
+
+## Next Steps
+
+- Explore the [Keyboard documentation](/api-reference/keyboard) for all button types
+- Learn about [file uploads](/examples/file-upload)
+- Check out [middleware patterns](/advanced/middleware) for advanced flows

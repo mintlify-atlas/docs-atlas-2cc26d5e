@@ -1,0 +1,639 @@
+---
+title: Attachments
+description: Working with VK attachment types and media handling
+icon: paperclip
+---
+
+## Overview
+
+VK-IO provides strongly-typed attachment classes for all VK media types. Each attachment type has its own class with specific properties and methods.
+
+## Base Attachment Class
+
+All attachments extend the base `Attachment` class which provides common functionality:
+
+```typescript
+import { Attachment } from 'vk-io';
+
+// Properties available on all attachments
+attachment.id          // Attachment ID
+attachment.ownerId     // Owner ID
+attachment.accessKey   // Access key (if present)
+attachment.type        // Attachment type
+attachment.isFilled    // Whether full data is loaded
+
+// Methods
+attachment.toString()               // Returns "type{ownerId}_{id}_{accessKey}"
+attachment.equals(otherAttachment)  // Compare attachments
+attachment.toJSON()                 // Serialize to JSON
+```
+
+### Parsing Attachments
+
+```typescript
+// Parse from string
+const attachment = Attachment.fromString('photo-1_456239099', vk.api);
+
+console.log(attachment.type);     // "photo"
+console.log(attachment.ownerId);  // -1
+console.log(attachment.id);       // 456239099
+```
+
+## Attachment Types
+
+VK-IO supports all VK attachment types with dedicated classes:
+
+<Tabs>
+  <Tab title="Photo">
+    ### PhotoAttachment
+
+    Photos with multiple sizes and metadata.
+
+    ```typescript
+    import { PhotoAttachment } from 'vk-io';
+
+    // From message
+    context.attachments.forEach(attachment => {
+      if (attachment instanceof PhotoAttachment) {
+        console.log('Photo ID:', attachment.id);
+        console.log('Album ID:', attachment.albumId);
+        console.log('Text:', attachment.text);
+        console.log('Dimensions:', attachment.width, 'x', attachment.height);
+        
+        // Get photo URLs
+        console.log('Small:', attachment.smallSizeUrl);
+        console.log('Medium:', attachment.mediumSizeUrl);
+        console.log('Large:', attachment.largeSizeUrl);
+        
+        // Access all sizes
+        attachment.sizes?.forEach(size => {
+          console.log(`Size ${size.type}: ${size.url} (${size.width}x${size.height})`);
+        });
+      }
+    });
+    ```
+
+    **Properties:**
+    - `userId` - User who uploaded the photo
+    - `albumId` - Album ID
+    - `text` - Photo caption
+    - `createdAt` - Upload timestamp
+    - `width` / `height` - Dimensions
+    - `sizes` - Array of all available sizes
+    - `smallSizeUrl` - URL for small size (130 or 75px)
+    - `mediumSizeUrl` - URL for medium size (807, 604px or less)
+    - `largeSizeUrl` - URL for large size (2560, 1280px or less)
+
+    **Methods:**
+    - `getSizes(sizeTypes: string[])` - Get specific sizes by type
+    - `loadAttachmentPayload()` - Load full data from API
+  </Tab>
+
+  <Tab title="Video">
+    ### VideoAttachment
+
+    Video files, live streams, and broadcasts.
+
+    ```typescript
+    import { VideoAttachment } from 'vk-io';
+
+    context.attachments.forEach(attachment => {
+      if (attachment instanceof VideoAttachment) {
+        console.log('Title:', attachment.title);
+        console.log('Duration:', attachment.duration, 'seconds');
+        console.log('Views:', attachment.viewsCount);
+        console.log('Player URL:', attachment.player);
+        
+        // Check video type
+        if (attachment.isBroadcast) {
+          console.log('This is a live broadcast');
+        }
+        if (attachment.isUpcoming) {
+          console.log('Upcoming broadcast');
+        }
+        
+        // Check permissions
+        if (attachment.isCanEdit) {
+          console.log('You can edit this video');
+        }
+      }
+    });
+    ```
+
+    **Properties:**
+    - `title` / `description` - Video metadata
+    - `duration` - Length in seconds
+    - `createdAt` / `addedAt` - Timestamps
+    - `viewsCount` / `commentsCount` - Statistics
+    - `player` - Player URL
+    - `platformName` - External platform name
+    - `isRepeat` - Can repeat
+    - `isCanAdd` / `isCanEdit` - Permissions
+    - `isProcessing` - Still processing
+    - `isBroadcast` / `isUpcoming` - Live stream status
+    - `isFavorited` - Bookmarked by user
+  </Tab>
+
+  <Tab title="Audio">
+    ### AudioAttachment
+
+    Audio tracks and songs.
+
+    ```typescript
+    import { AudioAttachment } from 'vk-io';
+
+    context.attachments.forEach(attachment => {
+      if (attachment instanceof AudioAttachment) {
+        console.log('Artist:', attachment.artist);
+        console.log('Title:', attachment.title);
+        console.log('Duration:', attachment.duration);
+        console.log('URL:', attachment.url);
+        
+        if (attachment.isHq) {
+          console.log('High quality audio');
+        }
+        
+        if (attachment.lyricsId) {
+          console.log('Has lyrics, ID:', attachment.lyricsId);
+        }
+      }
+    });
+    ```
+
+    **Properties:**
+    - `artist` / `title` - Track information
+    - `duration` - Length in seconds
+    - `url` - Audio file URL
+    - `isHq` - High quality flag
+    - `lyricsId` - Lyrics ID if available
+    - `albumId` - Album ID
+    - `genreId` - Genre ID
+    - `createdAt` - Upload timestamp
+  </Tab>
+
+  <Tab title="Document">
+    ### DocumentAttachment
+
+    Files, GIFs, graffiti, voice messages.
+
+    ```typescript
+    import { DocumentAttachment } from 'vk-io';
+
+    context.attachments.forEach(attachment => {
+      if (attachment instanceof DocumentAttachment) {
+        console.log('Title:', attachment.title);
+        console.log('Extension:', attachment.extension);
+        console.log('Size:', attachment.size, 'bytes');
+        console.log('URL:', attachment.url);
+        
+        // Check document type
+        if (attachment.isGif) {
+          console.log('This is a GIF');
+        } else if (attachment.isVoice) {
+          console.log('Voice message');
+          const audioMsg = attachment.preview?.audio_message;
+          console.log('Duration:', audioMsg?.duration);
+        } else if (attachment.isImage) {
+          console.log('Image file');
+        }
+        
+        // Type ID mapping:
+        // 1 = text, 2 = archive, 3 = gif
+        // 4 = image, 5 = audio, 6 = video
+        // 7 = e-book, 8 = unknown
+        console.log('Type ID:', attachment.typeId);
+      }
+    });
+    ```
+
+    **Properties:**
+    - `title` - File name
+    - `size` - File size in bytes
+    - `extension` - File extension
+    - `url` - Download URL
+    - `typeId` - Document type (1-8)
+    - `createdAt` - Upload timestamp
+    - `preview` - Preview data (for images, voice, graffiti)
+    - Boolean checks: `isText`, `isArchive`, `isGif`, `isImage`, `isAudio`, `isVideo`, `isBook`, `isGraffiti`, `isVoice`
+  </Tab>
+</Tabs>
+
+## More Attachment Types
+
+<Tabs>
+  <Tab title="Wall Post">
+    ### WallAttachment
+
+    Wall posts with full metadata.
+
+    ```typescript
+    import { WallAttachment } from 'vk-io';
+
+    context.attachments.forEach(attachment => {
+      if (attachment instanceof WallAttachment) {
+        console.log('Post text:', attachment.text);
+        console.log('Author ID:', attachment.authorId);
+        console.log('Created:', new Date(attachment.createdAt! * 1000));
+        
+        // Statistics
+        console.log('Likes:', attachment.likesCount);
+        console.log('Comments:', attachment.commentsCount);
+        console.log('Reposts:', attachment.repostsCount);
+        console.log('Views:', attachment.viewsCount);
+        
+        // Nested attachments
+        console.log('Attachments:', attachment.attachments.length);
+        
+        // Repost chain
+        if (attachment.copyHistory) {
+          console.log('Repost chain length:', attachment.copyHistory.length);
+        }
+        
+        // Permissions
+        if (attachment.isCanEdit) {
+          console.log('You can edit this post');
+        }
+      }
+    });
+    ```
+
+    **Properties:**
+    - `text` - Post text
+    - `authorId` / `signerId` - Author information
+    - `createdAt` - Timestamp
+    - `postType` - Post type
+    - Statistics: `likesCount`, `commentsCount`, `repostsCount`, `viewsCount`
+    - `attachments` - Nested attachments array
+    - `copyHistory` - Repost chain
+    - Permissions: `isCanEdit`, `isCanDelete`, `isCanPin`, `isCanCommented`
+    - Status: `isPinned`, `hasAds`, `isFavorited`
+  </Tab>
+
+  <Tab title="Poll">
+    ### PollAttachment
+
+    Polls and surveys.
+
+    ```typescript
+    import { PollAttachment } from 'vk-io';
+
+    context.attachments.forEach(attachment => {
+      if (attachment instanceof PollAttachment) {
+        console.log('Question:', attachment.question);
+        console.log('Total votes:', attachment.votes);
+        console.log('Created:', new Date(attachment.createdAt! * 1000));
+        
+        // Poll settings
+        if (attachment.isAnonymous) {
+          console.log('Anonymous poll');
+        }
+        if (attachment.isMultiple) {
+          console.log('Multiple choice allowed');
+        }
+        
+        // Display answers
+        attachment.answers?.forEach(answer => {
+          console.log(`${answer.text}: ${answer.votes} votes (${answer.rate}%)`);
+        });
+        
+        // User's choice
+        if (attachment.answerIds) {
+          console.log('You voted for:', attachment.answerIds);
+        }
+        
+        // Check if poll has background
+        if (attachment.background) {
+          console.log('Background type:', attachment.background.type);
+        }
+      }
+    });
+    ```
+
+    **Properties:**
+    - `question` - Poll question
+    - `votes` - Total votes
+    - `answers` - Array of answer options with votes and percentages
+    - `answerIds` - User's selected answers
+    - `friends` - IDs of friends who voted
+    - `background` - Background styling
+    - `photo` - Attached photo
+    - Status: `isAnonymous`, `isMultiple`, `isClosed`
+    - Permissions: `isCanEdit`, `isCanVote`, `isCanShare`
+  </Tab>
+
+  <Tab title="Market">
+    ### MarketAttachment
+
+    Market products.
+
+    ```typescript
+    import { MarketAttachment } from 'vk-io';
+
+    context.attachments.forEach(attachment => {
+      if (attachment instanceof MarketAttachment) {
+        console.log('Product:', attachment.title);
+        console.log('Description:', attachment.description);
+        console.log('Price:', attachment.price?.text);
+        console.log('URL:', attachment.url);
+        
+        // Product details
+        if (attachment.dimensions) {
+          const { width, height, length } = attachment.dimensions;
+          console.log(`Dimensions: ${width}x${height}x${length}`);
+        }
+        
+        if (attachment.weight) {
+          console.log('Weight:', attachment.weight);
+        }
+        
+        // Category
+        if (attachment.category) {
+          console.log('Category:', attachment.category.name);
+        }
+        
+        // Photos
+        attachment.photos?.forEach(photo => {
+          console.log('Photo URL:', photo.largeSizeUrl);
+        });
+        
+        // Availability: 0 = available, 1 = deleted, 2 = unavailable
+        console.log('Availability:', attachment.availability);
+      }
+    });
+    ```
+
+    **Properties:**
+    - `title` / `description` - Product info
+    - `price` - Price object with amount and currency
+    - `url` - Product page URL
+    - `dimensions` - Width, height, length
+    - `weight` - Product weight
+    - `category` - Category information
+    - `photos` - Product photos array
+    - `availability` - Availability status (0/1/2)
+    - `likes` - Likes information
+    - `buttonTitle` - Action button text
+    - Permissions: `canComment`, `canRepost`
+  </Tab>
+
+  <Tab title="Link & Others">
+    ### LinkAttachment
+
+    External links with previews.
+
+    ```typescript
+    import { LinkAttachment } from 'vk-io';
+
+    context.attachments.forEach(attachment => {
+      if (attachment instanceof LinkAttachment) {
+        console.log('Title:', attachment.title);
+        console.log('Description:', attachment.description);
+        console.log('URL:', attachment.url);
+        
+        if (attachment.hasPhoto && attachment.photo) {
+          console.log('Preview:', attachment.photo.largeSizeUrl);
+        }
+        
+        if (attachment.button) {
+          console.log('Button:', attachment.button.title);
+        }
+      }
+    });
+    ```
+
+    ### StickerAttachment
+
+    Stickers and animated stickers.
+
+    ```typescript
+    import { StickerAttachment } from 'vk-io';
+
+    if (attachment instanceof StickerAttachment) {
+      console.log('Sticker ID:', attachment.id);
+      console.log('Product ID:', attachment.productId);
+      
+      // Get sticker images
+      attachment.images.forEach(img => {
+        console.log(`Size: ${img.width}x${img.height}, URL: ${img.url}`);
+      });
+      
+      // Images with background
+      attachment.imagesWithBackground.forEach(img => {
+        console.log(`Background: ${img.url}`);
+      });
+    }
+    ```
+
+    ### GraffitiAttachment
+
+    Graffiti drawings.
+
+    ```typescript
+    import { GraffitiAttachment } from 'vk-io';
+
+    if (attachment instanceof GraffitiAttachment) {
+      console.log('Graffiti URL:', attachment.url);
+      console.log('Size:', attachment.width, 'x', attachment.height);
+    }
+    ```
+
+    **Other Types:**
+    - `AudioMessageAttachment` - Voice messages
+    - `StoryAttachment` - Stories
+    - `GiftAttachment` - Gifts
+    - `MarketAlbumAttachment` - Market collections
+    - `WallReplyAttachment` - Wall comments
+  </Tab>
+</Tabs>
+
+## Working with Attachments
+
+### Loading Full Data
+
+Most attachments have partial data initially. Load full data when needed:
+
+```typescript
+const photo = context.attachments[0] as PhotoAttachment;
+
+if (!photo.isFilled) {
+  await photo.loadAttachmentPayload();
+}
+
+// Now all data is available
+console.log('Album ID:', photo.albumId);
+console.log('Upload date:', photo.createdAt);
+```
+
+### Type Checking
+
+```typescript
+import { 
+  PhotoAttachment, 
+  VideoAttachment, 
+  DocumentAttachment,
+  AttachmentType 
+} from 'vk-io';
+
+for (const attachment of context.attachments) {
+  // Using instanceof
+  if (attachment instanceof PhotoAttachment) {
+    console.log('Photo:', attachment.largeSizeUrl);
+  }
+  
+  // Using type property
+  if (attachment.type === AttachmentType.VIDEO) {
+    const video = attachment as VideoAttachment;
+    console.log('Video:', video.player);
+  }
+  
+  // Type guards
+  switch (attachment.type) {
+    case 'photo':
+      handlePhoto(attachment as PhotoAttachment);
+      break;
+    case 'video':
+      handleVideo(attachment as VideoAttachment);
+      break;
+    case 'doc':
+      handleDocument(attachment as DocumentAttachment);
+      break;
+  }
+}
+```
+
+### Filtering Attachments
+
+```typescript
+// Get only photos
+const photos = context.attachments.filter(
+  (a): a is PhotoAttachment => a instanceof PhotoAttachment
+);
+
+// Get only videos and documents
+const media = context.attachments.filter(a => 
+  a instanceof VideoAttachment || a instanceof DocumentAttachment
+);
+
+// Get first photo
+const firstPhoto = context.attachments.find(
+  (a): a is PhotoAttachment => a instanceof PhotoAttachment
+);
+```
+
+### Sending Attachments
+
+```typescript
+// Forward attachments
+await context.send({
+  message: 'Check this out!',
+  attachment: context.attachments
+});
+
+// Send specific attachments
+const photos = context.attachments.filter(
+  (a): a is PhotoAttachment => a instanceof PhotoAttachment
+);
+await context.send({
+  message: 'Photos only',
+  attachment: photos
+});
+
+// Mix attachments from different sources
+await context.send({
+  message: 'Mixed content',
+  attachment: [
+    context.attachments[0],
+    'photo-1_456239099',
+    await vk.upload.messagePhoto({
+      source: './image.jpg'
+    })
+  ]
+});
+```
+
+### Transform Attachments
+
+Convert raw API data to attachment objects:
+
+```typescript
+import { transformAttachments } from 'vk-io';
+
+const rawAttachments = [
+  { type: 'photo', photo: { id: 1, owner_id: -1, ... } },
+  { type: 'video', video: { id: 2, owner_id: -1, ... } }
+];
+
+const attachments = transformAttachments(rawAttachments, vk.api);
+
+attachments.forEach(attachment => {
+  console.log(`${attachment.type}: ${attachment.toString()}`);
+});
+```
+
+## Advanced Patterns
+
+### Download All Photos
+
+```typescript
+import { PhotoAttachment } from 'vk-io';
+import { writeFile } from 'fs/promises';
+import fetch from 'node-fetch';
+
+async function downloadPhotos(attachments: Attachment[]) {
+  const photos = attachments.filter(
+    (a): a is PhotoAttachment => a instanceof PhotoAttachment
+  );
+  
+  for (const photo of photos) {
+    const url = photo.largeSizeUrl || photo.mediumSizeUrl;
+    if (!url) continue;
+    
+    const response = await fetch(url);
+    const buffer = await response.buffer();
+    await writeFile(`photo_${photo.id}.jpg`, buffer);
+    
+    console.log(`Downloaded: photo_${photo.id}.jpg`);
+  }
+}
+
+await downloadPhotos(context.attachments);
+```
+
+### Process Documents by Type
+
+```typescript
+import { DocumentAttachment } from 'vk-io';
+
+function processDocuments(attachments: Attachment[]) {
+  const docs = attachments.filter(
+    (a): a is DocumentAttachment => a instanceof DocumentAttachment
+  );
+  
+  for (const doc of docs) {
+    if (doc.isGif) {
+      console.log(`GIF: ${doc.url}`);
+    } else if (doc.isVoice) {
+      const duration = doc.preview?.audio_message?.duration;
+      console.log(`Voice message: ${duration}s`);
+    } else if (doc.isImage) {
+      console.log(`Image: ${doc.title} (${doc.size} bytes)`);
+    } else {
+      console.log(`File: ${doc.title}.${doc.extension}`);
+    }
+  }
+}
+```
+
+<Warning>
+Some attachment types (like audio) may have restricted access depending on VK API permissions and privacy settings.
+</Warning>
+
+<Accordion title="Source Code Reference">
+Attachment classes are implemented in:
+- `/packages/vk-io/src/structures/attachments/attachment.ts:27` - Base `Attachment` class
+- `/packages/vk-io/src/structures/attachments/photo.ts:34` - `PhotoAttachment`
+- `/packages/vk-io/src/structures/attachments/video.ts:32` - `VideoAttachment`
+- `/packages/vk-io/src/structures/attachments/audio.ts:25` - `AudioAttachment`
+- `/packages/vk-io/src/structures/attachments/document.ts:37` - `DocumentAttachment`
+- And more in the same directory
+</Accordion>

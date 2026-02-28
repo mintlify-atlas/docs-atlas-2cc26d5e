@@ -1,0 +1,381 @@
+---
+title: API Module
+description: Make requests to VK API methods with automatic rate limiting and execution modes
+---
+
+The API module is the core interface for making requests to VK API methods. It provides automatic rate limiting, request batching, and flexible execution modes.
+
+## Initialization
+
+```typescript
+import { API } from 'vk-io';
+
+const api = new API({
+  token: process.env.VK_TOKEN
+});
+```
+
+## Making API Calls
+
+VK-IO provides a convenient proxy-based interface for calling API methods. Simply copy the method name from VK API documentation:
+
+```typescript
+const users = await api.users.get({
+  user_ids: 1
+});
+
+console.log(users); // [{ id: 1, first_name: 'Pavel', last_name: 'Durov' }]
+```
+
+Under the hood, `api.users.get()` is equivalent to:
+
+```typescript
+const users = await api.call('users.get', {
+  user_ids: 1
+});
+```
+
+<Note>
+  The proxy interface provides full TypeScript autocompletion for all VK API methods.
+</Note>
+
+## Configuration Options
+
+### Rate Limiting
+
+By default, VK-IO limits requests to **3 per second** (user tokens and service keys):
+
+<ParamField path="apiLimit" type="number" default={3}>
+  Requests per second. For group tokens, use `20`
+</ParamField>
+
+<ParamField path="apiWait" type="number" default={3000}>
+  Time to wait (in ms) before re-querying after rate limit error
+</ParamField>
+
+```typescript
+const api = new API({
+  token: process.env.GROUP_TOKEN,
+  apiLimit: 20  // Group token limit
+});
+```
+
+### Request Modes
+
+<Tabs>
+  <Tab title="sequential">
+    **Default mode.** Sends requests one by one.
+    
+    ```typescript
+    const api = new API({
+      token: process.env.TOKEN,
+      apiMode: 'sequential'
+    });
+    ```
+    
+    - 1 method = 1 request
+    - Safest option
+    - Best for low-volume applications
+  </Tab>
+  
+  <Tab title="parallel">
+    Batches methods using `execute` to send up to 25 methods in one request.
+    
+    ```typescript
+    const api = new API({
+      token: process.env.TOKEN,
+      apiMode: 'parallel',
+      apiExecuteCount: 25  // Methods per execute call
+    });
+    ```
+    
+    - 1-25 methods = 1 request
+    - Significantly faster for bulk operations
+    - Some methods cannot be batched (see `apiExecuteUnsupportedMethods`)
+  </Tab>
+  
+  <Tab title="parallel_selected">
+    Batches only specific methods via `execute`, others use sequential mode.
+    
+    ```typescript
+    const api = new API({
+      token: process.env.TOKEN,
+      apiMode: 'parallel_selected',
+      apiExecuteMethods: ['messages.send', 'users.get']
+    });
+    ```
+    
+    - Hybrid approach
+    - Optimizes specific high-volume methods
+    - Other methods run sequentially
+  </Tab>
+</Tabs>
+
+<ParamField path="apiExecuteUnsupportedMethods" type="string[]">
+  Methods that cannot be batched in `execute` (mainly upload methods):
+  
+  ```typescript
+  [
+    'photos.save',
+    'photos.saveWallPhoto',
+    'photos.saveMessagesPhoto',
+    'messages.setChatPhoto',
+    'audio.save',
+    'docs.save',
+    'stories.save',
+    'polls.savePhoto'
+  ]
+  ```
+</ParamField>
+
+### Request Timing Mode
+
+<Tabs>
+  <Tab title="sequential">
+    **Default.** Sends requests with interval `1000ms / apiLimit`.
+    
+    ```typescript
+    const api = new API({
+      apiRequestMode: 'sequential',
+      apiLimit: 3  // ~333ms between requests
+    });
+    ```
+  </Tab>
+  
+  <Tab title="burst">
+    Sends all requests immediately up to `apiLimit`.
+    
+    ```typescript
+    const api = new API({
+      apiRequestMode: 'burst',
+      apiLimit: 20
+    });
+    ```
+    
+    <Warning>
+      May cause `EAI_AGAIN` errors due to DNS resolution limits. Use with caution.
+    </Warning>
+  </Tab>
+</Tabs>
+
+## Execute Methods
+
+### Custom Execute Code
+
+Run custom VKScript code:
+
+```typescript
+const { response, errors } = await api.execute({
+  code: `
+    var users = API.users.get({user_ids: Args.ids});
+    var groups = API.groups.getById({group_ids: Args.gids});
+    
+    return {
+      users: users,
+      groups: groups
+    };
+  `,
+  ids: [1, 2, 3],
+  gids: [1, 2]
+});
+
+console.log(response); // { users: [...], groups: [...] }
+console.log(errors);   // ExecuteError[]
+```
+
+<Note>
+  `execute` returns `{response, errors}` format instead of just `response`.
+</Note>
+
+### Stored Procedures
+
+Call stored procedures from your VK application:
+
+```typescript
+const { response, errors } = await api.procedure('myProcedure', {
+  param1: 'value',
+  param2: 123
+});
+
+// Equivalent to:
+// await api.call('execute.myProcedure', { ... });
+```
+
+## Advanced Configuration
+
+### Retry Logic
+
+<ParamField path="apiRetryLimit" type="number" default={3}>
+  Number of retries for failed requests
+</ParamField>
+
+<ParamField path="apiTimeout" type="number" default={10000}>
+  Request timeout in milliseconds
+</ParamField>
+
+```typescript
+const api = new API({
+  token: process.env.TOKEN,
+  apiRetryLimit: 5,
+  apiTimeout: 15000
+});
+```
+
+### Custom Headers
+
+<ParamField path="apiHeaders" type="Record<string, string>">
+  Custom headers for API requests
+</ParamField>
+
+```typescript
+const api = new API({
+  token: process.env.TOKEN,
+  apiHeaders: {
+    'User-Agent': 'MyBot/1.0'
+  }
+});
+```
+
+### Language Setting
+
+<ParamField path="language" type="'ru' | 'uk' | 'be' | 'en' | 'es' | 'fi' | 'de' | 'it'">
+  Response data language
+</ParamField>
+
+```typescript
+const api = new API({
+  token: process.env.TOKEN,
+  language: 'en'
+});
+```
+
+### Using Proxy
+
+Pass an HTTPS agent to use a proxy:
+
+```typescript
+import { API } from 'vk-io';
+import { HttpsProxyAgent } from 'https-proxy-agent';
+
+const agent = new HttpsProxyAgent('http://proxy.example.com:8080');
+
+const api = new API({
+  token: process.env.TOKEN,
+  agent
+});
+```
+
+## Captcha Handling
+
+Handle captcha challenges with a callback service:
+
+```typescript
+import { API, CallbackService } from 'vk-io';
+
+const callbackService = new CallbackService();
+
+const api = new API({
+  token: process.env.TOKEN,
+  callbackService
+});
+
+callbackService.onCaptcha(async (payload, retry) => {
+  console.log('Captcha required:', payload.redirectUri);
+  
+  // Solve captcha (use your preferred service)
+  const { successToken, cookie } = await solveCaptcha(payload.redirectUri);
+  
+  // Set cookie if needed
+  if (payload.request) {
+    payload.request.headers.cookie = cookie;
+  }
+  
+  try {
+    await retry(successToken);
+    console.log('Captcha solved successfully');
+  } catch (error) {
+    console.error('Failed to solve captcha');
+  }
+});
+```
+
+<Warning>
+  The captcha image URL can only be loaded once. Loading it multiple times generates a new captcha.
+</Warning>
+
+## APIRequest Class
+
+For advanced use cases, work directly with `APIRequest`:
+
+```typescript
+import { API, APIRequest } from 'vk-io';
+
+const api = new API({ token: process.env.TOKEN });
+
+const request = new APIRequest({
+  api,
+  method: 'users.get',
+  params: { user_ids: 1 }
+});
+
+// Get execute code representation
+const executeCode = String(request);
+console.log(executeCode); // API.users.get({"user_ids":1})
+
+// Execute the request
+const response = await api.callWithRequest(request);
+
+// Access the promise directly
+await request.promise;
+```
+
+## Available API Groups
+
+All VK API method groups are available:
+
+```typescript
+api.account.*
+api.ads.*
+api.appWidgets.*
+api.apps.*
+api.audio.*
+api.auth.*
+api.board.*
+api.database.*
+api.docs.*
+api.fave.*
+api.friends.*
+api.gifts.*
+api.groups.*
+api.leads.*
+api.leadForms.*
+api.likes.*
+api.market.*
+api.messages.*
+api.newsfeed.*
+api.notes.*
+api.notifications.*
+api.orders.*
+api.pages.*
+api.photos.*
+api.places.*
+api.polls.*
+api.podcasts.*
+api.prettyCards.*
+api.search.*
+api.secure.*
+api.stats.*
+api.status.*
+api.storage.*
+api.stories.*
+api.streaming.*
+api.users.*
+api.utils.*
+api.video.*
+api.wall.*
+api.widgets.*
+```
+
+<Tip>
+  See the [VK API Reference](https://dev.vk.com/method) for complete method documentation.
+</Tip>

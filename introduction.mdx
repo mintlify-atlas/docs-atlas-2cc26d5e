@@ -1,0 +1,127 @@
+---
+title: Introduction to VK-IO
+description: A powerful Node.js module for easily interacting with the VK API with TypeScript support and 100% API coverage
+---
+
+# Welcome to VK-IO
+
+VK-IO is a powerful [Node.js](https://nodejs.org) module that allows you to easily interact with the VK API. Built with TypeScript and designed for modern development, VK-IO provides a predictable abstraction over the VK API with complete feature coverage.
+
+<CardGroup cols={2}>
+  <Card title="Quick Start" icon="rocket" href="/quickstart">
+    Get up and running with your first VK bot in minutes
+  </Card>
+  <Card title="Installation" icon="download" href="/installation">
+    Install VK-IO using npm, yarn, or pnpm
+  </Card>
+  <Card title="API Reference" icon="code" href="/api-reference/vk">
+    Explore the complete API documentation
+  </Card>
+  <Card title="Examples" icon="lightbulb" href="/examples/simple-bot">
+    Learn from real-world bot implementations
+  </Card>
+</CardGroup>
+
+## Why VK-IO?
+
+<CardGroup cols={2}>
+  <Card title="Complete Coverage" icon="check">
+    **100% coverage** of the VK API with 1:1 mapping of API methods
+  </Card>
+  <Card title="Simple & Intuitive" icon="wand-magic-sparkles">
+    Predictable API design that mirrors VK's official methods
+  </Card>
+  <Card title="Type-Safe" icon="shield-check">
+    Written in **TypeScript** with full type definitions and test coverage
+  </Card>
+  <Card title="Modern & Reliable" icon="bolt">
+    Native ESM support with automatic request parallelization
+  </Card>
+</CardGroup>
+
+## Key Features
+
+### Intuitive API Design
+
+VK-IO provides a clean, predictable interface that maps directly to VK API methods:
+
+```javascript
+// Simple and intuitive
+vk.api.users.get({ user_ids: [1] });
+vk.api.wall.post({ message: 'Hello, VK!' });
+vk.api.messages.send({ peer_id: 123, message: 'Hi!' });
+```
+
+### Powerful Bot Development
+
+Build sophisticated bots with middleware support, keyboard builders, and rich message contexts:
+
+```javascript
+import { VK, Keyboard } from 'vk-io';
+
+const vk = new VK({ token: process.env.TOKEN });
+
+vk.updates.on('message_new', async (context) => {
+  await context.send('Hello! 👋', {
+    keyboard: Keyboard.builder()
+      .textButton({ label: 'Click me' })
+      .inline()
+  });
+});
+
+vk.updates.start();
+```
+
+### Advanced Capabilities
+
+<CardGroup cols={2}>
+  <Card title="Proxy Support" icon="shield">
+    Use custom agents for proxy configuration
+  </Card>
+  <Card title="Request Parallelization" icon="gauge-high">
+    Automatic optimization for massive API requests
+  </Card>
+  <Card title="User Authorization" icon="key">
+    Support for OAuth and Direct Authorization
+  </Card>
+  <Card title="Rich Ecosystem" icon="puzzle-piece">
+    Modular packages for sessions, scenes, and more
+  </Card>
+</CardGroup>
+
+## What You Can Build
+
+VK-IO is perfect for building:
+
+- **Chat Bots** - Interactive conversational bots with keyboards and commands
+- **Community Managers** - Automated posting and community interaction tools
+- **Analytics Tools** - Data collection and analysis applications
+- **Integration Services** - Connect VK with other platforms and services
+- **Custom Clients** - Build your own VK client applications
+
+## Ecosystem Packages
+
+VK-IO comes with a rich ecosystem of official packages:
+
+- **[@vk-io/hear](https://github.com/negezor/vk-io/tree/master/packages/hear)** - Simple command and pattern matching
+- **[@vk-io/session](https://github.com/negezor/vk-io/tree/master/packages/session)** - Session management for user state
+- **[@vk-io/scenes](https://github.com/negezor/vk-io/tree/master/packages/scenes)** - Middleware-based conversation flows
+- **[@vk-io/streaming](https://github.com/negezor/vk-io/tree/master/packages/streaming)** - Real-time data streaming
+- **[@vk-io/authorization](https://github.com/negezor/vk-io/tree/master/packages/authorization)** - User authorization flows
+
+<Note>
+  VK-IO assumes intermediate knowledge of JavaScript. If you're new to Node.js development, learn the basics first, then return to build amazing VK applications.
+</Note>
+
+## Ready to Get Started?
+
+Jump into the [Installation Guide](/installation) to set up VK-IO, or skip ahead to the [Quick Start](/quickstart) to build your first bot right away.
+
+<CardGroup cols={2}>
+  <Card title="Installation Guide" icon="download" href="/installation">
+    Install VK-IO and set up your development environment
+  </Card>
+  <Card title="Quick Start" icon="rocket" href="/quickstart">
+    Build your first working VK bot in under 5 minutes
+  </Card>
+</CardGroup>

@@ -1,0 +1,710 @@
+---
+title: Error Handling
+description: Error types, handling strategies, and recovery patterns
+icon: triangle-exclamation
+---
+
+## Overview
+
+VK-IO provides a comprehensive error handling system with specific error types for different failure scenarios. Proper error handling ensures your bot remains stable and provides meaningful feedback.
+
+## Error Types
+
+All VK-IO errors extend the base `VKError` class, which extends the standard JavaScript `Error`.
+
+### VKError (Base Class)
+
+The base error class for all VK-IO errors:
+
+```typescript
+import { VKError } from 'vk-io';
+
+interface IVKErrorOptions {
+  code: string | number;
+  message: string;
+  cause?: Error;
+}
+
+try {
+  // Some operation
+} catch (error) {
+  if (error instanceof VKError) {
+    console.error('VK Error:', error.message);
+    console.error('Error code:', error.code);
+    console.error('Stack:', error.stack);
+    
+    if (error.cause) {
+      console.error('Caused by:', error.cause);
+    }
+    
+    // Serialize to JSON
+    console.log(JSON.stringify(error.toJSON()));
+  }
+}
+```
+
+## API Errors
+
+### APIError
+
+Thrown when VK API returns an error response:
+
+```typescript
+import { APIError, APIErrorCode } from 'vk-io';
+
+try {
+  await vk.api.messages.send({
+    peer_id: 123,
+    message: 'Hello',
+    random_id: 0,
+  });
+} catch (error) {
+  if (error instanceof APIError) {
+    console.error(`API Error ${error.code}: ${error.message}`);
+    console.error('Request params:', error.params);
+    
+    // Handle specific errors
+    switch (error.code) {
+      case APIErrorCode.CAPTCHA:
+        console.log('Captcha required');
+        console.log('Captcha SID:', error.captchaSid);
+        console.log('Captcha Image:', error.captchaImg);
+        break;
+        
+      case APIErrorCode.AUTH_VALIDATION:
+        console.log('Validation required');
+        console.log('Redirect to:', error.redirectUri);
+        break;
+        
+      case APIErrorCode.NEED_CONFIRMATION:
+        console.log('Confirmation required:', error.confirmationText);
+        break;
+    }
+  }
+}
+```
+
+### Common API Error Codes
+
+<Tabs>
+  <Tab title="Authorization">
+    ```typescript
+    import { APIErrorCode } from 'vk-io';
+
+    // Authorization errors
+    APIErrorCode.UNKNOWN_ERROR = 1
+    APIErrorCode.APP_OFF = 2
+    APIErrorCode.UNKNOWN_METHOD = 3
+    APIErrorCode.INVALID_SIGNATURE = 4
+    APIErrorCode.AUTH_FAILURE = 5
+    APIErrorCode.TOO_MANY_REQUESTS = 6
+    APIErrorCode.NO_PERMISSIONS = 7
+    APIErrorCode.INVALID_REQUEST = 8
+    APIErrorCode.FLOOD_CONTROL = 9
+
+    // Handle authorization errors
+    if (error instanceof APIError) {
+      switch (error.code) {
+        case APIErrorCode.AUTH_FAILURE:
+          console.error('Invalid access token');
+          // Request new token
+          break;
+          
+        case APIErrorCode.NO_PERMISSIONS:
+          console.error('Missing required permissions');
+          break;
+          
+        case APIErrorCode.TOO_MANY_REQUESTS:
+          console.error('Rate limit exceeded');
+          await new Promise(r => setTimeout(r, 1000));
+          // Retry request
+          break;
+      }
+    }
+    ```
+  </Tab>
+
+  <Tab title="Validation">
+    ```typescript
+    import { APIErrorCode } from 'vk-io';
+
+    // Validation errors
+    APIErrorCode.PARAM_ERROR = 100
+    APIErrorCode.INVALID_USER_ID = 113
+    APIErrorCode.INVALID_TIMESTAMP = 150
+    APIErrorCode.ACCESS_DENIED = 15
+    APIErrorCode.CAPTCHA = 14
+    APIErrorCode.AUTH_VALIDATION = 17
+
+    if (error instanceof APIError) {
+      switch (error.code) {
+        case APIErrorCode.PARAM_ERROR:
+          console.error('Invalid parameter:', error.message);
+          console.error('Request params:', error.params);
+          break;
+          
+        case APIErrorCode.CAPTCHA:
+          // Handle captcha
+          const answer = await solveCaptcha(error.captchaImg);
+          await vk.api.call(method, {
+            ...params,
+            captcha_sid: error.captchaSid,
+            captcha_key: answer,
+          });
+          break;
+          
+        case APIErrorCode.ACCESS_DENIED:
+          console.error('Access denied to resource');
+          break;
+      }
+    }
+    ```
+  </Tab>
+
+  <Tab title="Messages">
+    ```typescript
+    import { APIErrorCode } from 'vk-io';
+
+    // Message-specific errors
+    APIErrorCode.MESSAGE_DENIED = 901
+    APIErrorCode.MESSAGE_PRIVACY = 902
+    APIErrorCode.MESSAGE_TOO_LONG = 914
+    APIErrorCode.MESSAGE_KEYBOARD_INVALID = 911
+    
+    if (error instanceof APIError) {
+      switch (error.code) {
+        case 901: // Can't send message to user
+          console.log('User has privacy settings that prevent messages');
+          break;
+          
+        case 902: // Can't send message to community
+          console.log('Cannot send messages to this chat');
+          break;
+          
+        case 914: // Message is too long
+          console.log('Message exceeds maximum length');
+          // Split message or shorten
+          break;
+          
+        case 911: // Invalid keyboard format
+          console.log('Keyboard JSON is invalid');
+          break;
+          
+        case 917: // No access to conversation
+          await context.send('I need access to this chat');
+          break;
+      }
+    }
+    ```
+  </Tab>
+
+  <Tab title="Groups">
+    ```typescript
+    import { APIErrorCode } from 'vk-io';
+
+    // Group-specific errors
+    if (error instanceof APIError) {
+      switch (error.code) {
+        case 15: // Access denied to group
+          console.log('Cannot access private group');
+          break;
+          
+        case 203: // Access denied to album
+          console.log('Album is private');
+          break;
+          
+        case 204: // Access denied to audio
+          console.log('Audio access restricted');
+          break;
+      }
+    }
+    ```
+  </Tab>
+</Tabs>
+
+## Collect Errors
+
+### CollectError
+
+Thrown during collection operations when using `createCollectIterator`:
+
+```typescript
+import { CollectError, CollectErrorCode } from 'vk-io';
+
+try {
+  const iterator = vk.api.collectIterator({
+    method: 'groups.getMembers',
+    params: { group_id: 1 },
+    countPerRequest: 1000,
+  });
+  
+  for await (const chunk of iterator) {
+    // Process chunk
+  }
+} catch (error) {
+  if (error instanceof CollectError) {
+    console.error('Collection failed:', error.message);
+    console.error('Error code:', error.code);
+    
+    if (error.code === CollectErrorCode.EXECUTE_ERROR) {
+      console.error('Execute errors:');
+      error.errors.forEach(executeError => {
+        console.error(`  - ${executeError.error_code}: ${executeError.error_msg}`);
+      });
+    }
+  }
+}
+```
+
+### Handling Collection Errors
+
+```typescript
+async function safeCollect<T>(method: string, params: object): Promise<T[]> {
+  const items: T[] = [];
+  let retries = 0;
+  const maxRetries = 3;
+  
+  while (retries < maxRetries) {
+    try {
+      const iterator = vk.api.collectIterator({
+        method,
+        params,
+        countPerRequest: 1000,
+      });
+      
+      for await (const chunk of iterator) {
+        items.push(...chunk.items);
+      }
+      
+      return items;
+    } catch (error) {
+      retries++;
+      
+      if (error instanceof CollectError) {
+        console.error(`Collection attempt ${retries} failed`);
+        
+        if (retries >= maxRetries) {
+          throw error;
+        }
+        
+        // Wait before retry
+        await new Promise(r => setTimeout(r, 1000 * retries));
+      } else {
+        throw error;
+      }
+    }
+  }
+  
+  return items;
+}
+```
+
+## Upload Errors
+
+### UploadError
+
+Thrown during file upload operations:
+
+```typescript
+import { UploadError, UploadErrorCode } from 'vk-io';
+
+try {
+  const photo = await vk.upload.messagePhoto({
+    source: './large-image.jpg',
+  });
+} catch (error) {
+  if (error instanceof UploadError) {
+    console.error('Upload failed:', error.message);
+    console.error('Error code:', error.code);
+    
+    // Handle specific upload errors
+    if (error.code === UploadErrorCode.MISSING_PARAMETERS) {
+      console.error('Missing required parameters');
+    }
+  }
+}
+```
+
+## Updates Errors
+
+### UpdatesError
+
+Thrown during updates polling or webhook operations:
+
+```typescript
+import { UpdatesError, UpdatesErrorCode } from 'vk-io';
+
+try {
+  await vk.updates.start();
+} catch (error) {
+  if (error instanceof UpdatesError) {
+    console.error('Updates error:', error.message);
+    console.error('Error code:', error.code);
+    
+    // Handle updates errors
+    switch (error.code) {
+      case UpdatesErrorCode.NEED_RESTART:
+        console.log('Need to restart updates');
+        await vk.updates.stop();
+        await vk.updates.start();
+        break;
+    }
+  }
+}
+```
+
+## Error Handling Strategies
+
+### Global Error Handler
+
+```typescript
+vk.updates.use(async (context, next) => {
+  try {
+    await next();
+  } catch (error) {
+    console.error('Global error handler:', error);
+    
+    // Log to monitoring service
+    await logToMonitoring(error, context);
+    
+    // Notify user
+    if (context.is('message')) {
+      await context.send(
+        'Sorry, an error occurred. Our team has been notified.'
+      ).catch(() => {
+        // Ignore send errors in error handler
+      });
+    }
+  }
+});
+```
+
+### Retry Logic
+
+```typescript
+async function retryableApiCall<T>(
+  fn: () => Promise<T>,
+  maxRetries = 3
+): Promise<T> {
+  let lastError: Error;
+  
+  for (let i = 0; i < maxRetries; i++) {
+    try {
+      return await fn();
+    } catch (error) {
+      lastError = error as Error;
+      
+      if (error instanceof APIError) {
+        // Retry on rate limit
+        if (error.code === APIErrorCode.TOO_MANY_REQUESTS) {
+          const delay = Math.pow(2, i) * 1000; // Exponential backoff
+          console.log(`Rate limited, waiting ${delay}ms...`);
+          await new Promise(r => setTimeout(r, delay));
+          continue;
+        }
+        
+        // Don't retry on auth errors
+        if (error.code === APIErrorCode.AUTH_FAILURE) {
+          throw error;
+        }
+      }
+      
+      // Wait before retry
+      if (i < maxRetries - 1) {
+        await new Promise(r => setTimeout(r, 1000 * (i + 1)));
+      }
+    }
+  }
+  
+  throw lastError!;
+}
+
+// Usage
+const users = await retryableApiCall(() =>
+  vk.api.users.get({ user_ids: [1, 2, 3] })
+);
+```
+
+### Graceful Degradation
+
+```typescript
+vk.updates.hear(/weather (.+)/i, async (context) => {
+  const [, city] = context.$match!;
+  
+  try {
+    // Try to get weather from API
+    const weather = await fetchWeather(city);
+    await context.send(`Weather in ${city}: ${weather}`);
+  } catch (error) {
+    console.error('Weather API failed:', error);
+    
+    // Fallback to cached data
+    const cached = await getCachedWeather(city);
+    if (cached) {
+      await context.send(
+        `Weather in ${city} (cached): ${cached}\n` +
+        `Note: Current data unavailable`
+      );
+    } else {
+      await context.send(
+        'Sorry, weather service is currently unavailable.'
+      );
+    }
+  }
+});
+```
+
+### Error Recovery
+
+```typescript
+class BotService {
+  private reconnectAttempts = 0;
+  private maxReconnectAttempts = 5;
+  
+  async start() {
+    try {
+      await vk.updates.start();
+      this.reconnectAttempts = 0; // Reset on success
+      console.log('Bot started successfully');
+    } catch (error) {
+      console.error('Failed to start bot:', error);
+      
+      if (this.reconnectAttempts < this.maxReconnectAttempts) {
+        this.reconnectAttempts++;
+        const delay = Math.pow(2, this.reconnectAttempts) * 1000;
+        
+        console.log(
+          `Reconnect attempt ${this.reconnectAttempts}/${this.maxReconnectAttempts} ` +
+          `in ${delay}ms`
+        );
+        
+        setTimeout(() => this.start(), delay);
+      } else {
+        console.error('Max reconnection attempts reached');
+        process.exit(1);
+      }
+    }
+  }
+  
+  async stop() {
+    await vk.updates.stop();
+    console.log('Bot stopped');
+  }
+}
+
+const bot = new BotService();
+bot.start();
+```
+
+## Specific Error Patterns
+
+### Handling Privacy Errors
+
+```typescript
+async function sendMessageSafely(
+  userId: number,
+  message: string
+): Promise<boolean> {
+  try {
+    await vk.api.messages.send({
+      user_id: userId,
+      message,
+      random_id: 0,
+    });
+    return true;
+  } catch (error) {
+    if (error instanceof APIError && error.code === 901) {
+      console.log(`User ${userId} has privacy settings enabled`);
+      // Log to database that user cannot receive messages
+      await db.users.update(userId, { canReceiveMessages: false });
+      return false;
+    }
+    throw error;
+  }
+}
+```
+
+### Handling Captcha
+
+```typescript
+import { APIError, APIErrorCode } from 'vk-io';
+
+async function callWithCaptcha<T>(
+  method: string,
+  params: object
+): Promise<T> {
+  try {
+    return await vk.api.call(method, params);
+  } catch (error) {
+    if (error instanceof APIError && error.code === APIErrorCode.CAPTCHA) {
+      console.log('Captcha required');
+      console.log('Image URL:', error.captchaImg);
+      
+      // Solve captcha (manual or service)
+      const captchaKey = await solveCaptchaManually(error.captchaImg!);
+      
+      // Retry with captcha
+      return await vk.api.call(method, {
+        ...params,
+        captcha_sid: error.captchaSid,
+        captcha_key: captchaKey,
+      });
+    }
+    throw error;
+  }
+}
+
+async function solveCaptchaManually(imageUrl: string): Promise<string> {
+  // Implement manual captcha solving
+  // Could use external service like Anti-Captcha, 2Captcha, etc.
+  return 'captcha_answer';
+}
+```
+
+### Handling Network Errors
+
+```typescript
+import { APIError } from 'vk-io';
+
+vk.updates.use(async (context, next) => {
+  try {
+    await next();
+  } catch (error) {
+    // Handle network errors
+    if (error.code === 'ECONNRESET' || error.code === 'ETIMEDOUT') {
+      console.error('Network error:', error.message);
+      
+      // Retry logic
+      if (context.retries < 3) {
+        context.retries = (context.retries || 0) + 1;
+        await new Promise(r => setTimeout(r, 1000));
+        return next();
+      }
+    }
+    
+    throw error;
+  }
+});
+```
+
+## Logging and Monitoring
+
+### Structured Error Logging
+
+```typescript
+interface ErrorLog {
+  timestamp: Date;
+  error: {
+    name: string;
+    message: string;
+    code?: string | number;
+    stack?: string;
+  };
+  context: {
+    type: string;
+    userId?: number;
+    chatId?: number;
+  };
+}
+
+function logError(error: Error, context?: any): void {
+  const log: ErrorLog = {
+    timestamp: new Date(),
+    error: {
+      name: error.name,
+      message: error.message,
+      stack: error.stack,
+    },
+    context: {
+      type: context?.type || 'unknown',
+      userId: context?.senderId,
+      chatId: context?.chatId,
+    },
+  };
+  
+  if (error instanceof VKError) {
+    log.error.code = error.code;
+  }
+  
+  // Log to file/service
+  console.error(JSON.stringify(log, null, 2));
+  
+  // Send to monitoring service
+  // await sendToSentry(log);
+}
+
+vk.updates.use(async (context, next) => {
+  try {
+    await next();
+  } catch (error) {
+    logError(error as Error, context);
+    throw error;
+  }
+});
+```
+
+### Error Metrics
+
+```typescript
+class ErrorMetrics {
+  private errors = new Map<string, number>();
+  
+  track(error: Error): void {
+    const key = error instanceof VKError 
+      ? `${error.name}:${error.code}`
+      : error.name;
+    
+    this.errors.set(key, (this.errors.get(key) || 0) + 1);
+  }
+  
+  getStats(): Record<string, number> {
+    return Object.fromEntries(this.errors);
+  }
+  
+  reset(): void {
+    this.errors.clear();
+  }
+}
+
+const metrics = new ErrorMetrics();
+
+vk.updates.use(async (context, next) => {
+  try {
+    await next();
+  } catch (error) {
+    metrics.track(error as Error);
+    throw error;
+  }
+});
+
+// Log metrics every hour
+setInterval(() => {
+  console.log('Error metrics:', metrics.getStats());
+  metrics.reset();
+}, 60 * 60 * 1000);
+```
+
+## Best Practices
+
+<Note>
+1. **Always catch errors**: Use try-catch blocks or middleware error handlers
+2. **Log errors properly**: Include context and stack traces
+3. **Implement retries**: For transient errors like rate limits
+4. **Graceful degradation**: Provide fallbacks when services fail
+5. **User feedback**: Inform users when errors affect them
+6. **Monitor errors**: Track error rates and types
+7. **Don't expose internals**: Show user-friendly messages, log technical details
+</Note>
+
+<Warning>
+Never expose sensitive information (tokens, API keys, user data) in error messages or logs.
+</Warning>
+
+<Accordion title="Source Code Reference">
+Error classes are implemented in:
+- `/packages/vk-io/src/errors/error.ts:10` - Base `VKError` class
+- `/packages/vk-io/src/errors/api.ts:21` - `APIError` class
+- `/packages/vk-io/src/errors/collect.ts:12` - `CollectError` class
+- `/packages/vk-io/src/errors/upload.ts:3` - `UploadError` class
+- `/packages/vk-io/src/errors/updates.ts:3` - `UpdatesError` class
+</Accordion>

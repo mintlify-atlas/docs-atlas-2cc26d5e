@@ -1,0 +1,393 @@
+---
+title: Collection Utilities
+description: Efficient data collection and iteration for large datasets
+icon: layer-group
+---
+
+## Overview
+
+VK-IO provides powerful collection utilities for efficiently fetching large datasets from the VK API. These utilities handle pagination, parallel requests, and automatic retry logic.
+
+## Collection Iterator
+
+The `createCollectIterator` function creates an async generator that efficiently fetches paginated data.
+
+### Basic Usage
+
+```typescript
+import { VK } from 'vk-io';
+
+const vk = new VK({ token: process.env.TOKEN });
+
+// Collect all group members
+const iterator = vk.api.collectIterator({
+  method: 'groups.getMembers',
+  params: {
+    group_id: 1,
+    count: 1000
+  }
+});
+
+for await (const chunk of iterator) {
+  console.log(`Progress: ${chunk.percent}%`);
+  console.log(`Received: ${chunk.received}/${chunk.total}`);
+  console.log(`Items in chunk: ${chunk.items.length}`);
+  
+  // Process items
+  for (const member of chunk.items) {
+    // Handle each member
+  }
+}
+```
+
+### Iterator Options
+
+The iterator accepts several configuration options:
+
+```typescript
+interface ICollectIteratorOptions {
+  api: API;
+  method: string;
+  params: Record<string, any> & {
+    count?: number;
+    offset?: number;
+  };
+  maxCount?: number;          // Maximum items to collect
+  countPerRequest: number;    // Items per API request
+  retryLimit?: number;        // Retry failed requests (default: 3)
+  parallelRequests?: number;  // Parallel execute calls (default: 25)
+}
+```
+
+<Note>
+The `parallelRequests` parameter must be between 1 and 25. Higher values improve speed but may hit rate limits.
+</Note>
+
+### Iterator Response
+
+Each iteration yields detailed progress information:
+
+```typescript
+interface ICollectIteratorData<T> {
+  received: number;           // Total items received so far
+  percent: number;            // Progress percentage (0-100)
+  total: number;              // Total items available
+  items: T[];                 // Items in this chunk
+  profiles: UsersUserFull[];  // User profiles (if available)
+  groups: GroupsGroupFull[];  // Group data (if available)
+}
+```
+
+## Advanced Patterns
+
+### Collect with Limit
+
+```typescript
+// Collect only first 5000 members
+const iterator = vk.api.collectIterator({
+  method: 'groups.getMembers',
+  params: {
+    group_id: 1
+  },
+  countPerRequest: 1000,
+  maxCount: 5000
+});
+
+const members = [];
+for await (const chunk of iterator) {
+  members.push(...chunk.items);
+}
+
+console.log(`Collected ${members.length} members`);
+```
+
+### Progress Tracking
+
+```typescript
+const iterator = vk.api.collectIterator({
+  method: 'wall.get',
+  params: {
+    owner_id: -1,
+    count: 100
+  },
+  countPerRequest: 100
+});
+
+for await (const chunk of iterator) {
+  // Update progress bar
+  console.log(`[${'='.repeat(chunk.percent / 5)}${' '.repeat(20 - chunk.percent / 5)}] ${chunk.percent}%`);
+  
+  // Process posts
+  for (const post of chunk.items) {
+    console.log(`Post ${post.id}: ${post.text}`);
+  }
+}
+```
+
+### Collect with Extended Data
+
+```typescript
+// Collect posts with user and group information
+const iterator = vk.api.collectIterator({
+  method: 'newsfeed.get',
+  params: {
+    filters: 'post',
+    count: 100
+  },
+  countPerRequest: 100
+});
+
+for await (const chunk of iterator) {
+  // Access extended data
+  const userMap = new Map(chunk.profiles.map(u => [u.id, u]));
+  const groupMap = new Map(chunk.groups.map(g => [g.id, g]));
+  
+  for (const post of chunk.items) {
+    const author = post.source_id > 0 
+      ? userMap.get(post.source_id)
+      : groupMap.get(Math.abs(post.source_id));
+    
+    console.log(`${author?.name}: ${post.text}`);
+  }
+}
+```
+
+## Chain Execution
+
+The `Chain` class allows you to queue multiple API requests and execute them efficiently using VK's execute method.
+
+### Basic Chain Usage
+
+```typescript
+import { VK } from 'vk-io';
+
+const vk = new VK({ token: process.env.TOKEN });
+
+// Create a chain
+const chain = vk.api.chain();
+
+// Add requests to the queue
+const usersPromise = chain.append('users.get', { user_ids: [1, 2, 3] });
+const groupsPromise = chain.append('groups.getById', { group_ids: [1, 2] });
+const friendsPromise = chain.append('friends.get', { user_id: 1 });
+
+// Execute all requests
+await chain.run();
+
+// Get results from individual promises
+const users = await usersPromise;
+const groups = await groupsPromise;
+const friends = await friendsPromise;
+
+console.log('Users:', users);
+console.log('Groups:', groups);
+console.log('Friends:', friends);
+```
+
+### Promise-Based Chain
+
+Chains implement the `then` method, so you can use them like promises:
+
+```typescript
+const chain = vk.api.chain();
+
+const usersPromise = chain.append('users.get', { user_ids: [1] });
+const groupsPromise = chain.append('groups.getById', { group_ids: [1] });
+
+// Automatically starts execution
+const result = await chain;
+
+console.log('Response:', result.response);
+console.log('Errors:', result.errors);
+```
+
+### Batch Processing with Chain
+
+```typescript
+// Process multiple user IDs efficiently
+const userIds = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
+const chain = vk.api.chain();
+
+const promises = userIds.map(userId => 
+  chain.append('users.get', { 
+    user_ids: [userId],
+    fields: ['photo_100', 'online'] 
+  })
+);
+
+// Execute all requests in a single batch
+await chain.run();
+
+// Collect results
+const users = await Promise.all(promises);
+users.forEach(([user]) => {
+  console.log(`${user.first_name} ${user.last_name} - ${user.online ? 'Online' : 'Offline'}`);
+});
+```
+
+<Warning>
+Chains can only be executed once. Attempting to execute a chain multiple times will throw an error.
+</Warning>
+
+## Execute Method
+
+The `executes` function allows batch execution of the same method with different parameters.
+
+### Batch Execute
+
+```typescript
+import { executes } from 'vk-io';
+
+const { response, errors } = await executes({
+  api: vk.api,
+  method: 'users.get',
+  queue: [
+    { user_ids: [1] },
+    { user_ids: [2] },
+    { user_ids: [3] },
+    { user_ids: [4] },
+    { user_ids: [5] }
+  ]
+});
+
+console.log('Results:', response);
+if (errors.length > 0) {
+  console.error('Errors:', errors);
+}
+```
+
+## Performance Optimization
+
+### Parallel Requests
+
+```typescript
+// Maximum parallelization for fast collection
+const iterator = vk.api.collectIterator({
+  method: 'wall.get',
+  params: { owner_id: -1 },
+  countPerRequest: 100,
+  parallelRequests: 25  // Maximum allowed
+});
+```
+
+### Single Request Mode
+
+```typescript
+// Force single requests (useful for debugging)
+const iterator = vk.api.collectIterator({
+  method: 'wall.get',
+  params: { owner_id: -1 },
+  countPerRequest: 100,
+  parallelRequests: 1  // One request at a time
+});
+```
+
+## Error Handling
+
+### Retry Logic
+
+The iterator automatically retries failed requests:
+
+```typescript
+const iterator = vk.api.collectIterator({
+  method: 'groups.getMembers',
+  params: { group_id: 1 },
+  countPerRequest: 1000,
+  retryLimit: 5  // Retry up to 5 times
+});
+
+try {
+  for await (const chunk of iterator) {
+    // Process chunk
+  }
+} catch (error) {
+  // Handle error after all retries exhausted
+  if (error instanceof CollectError) {
+    console.error('Collection failed:', error.message);
+    console.error('Execute errors:', error.errors);
+  }
+}
+```
+
+### Collect Errors
+
+```typescript
+import { CollectError, CollectErrorCode } from 'vk-io';
+
+try {
+  for await (const chunk of iterator) {
+    // Process chunk
+  }
+} catch (error) {
+  if (error instanceof CollectError) {
+    if (error.code === CollectErrorCode.EXECUTE_ERROR) {
+      console.error('Execute method failed');
+      error.errors.forEach(err => {
+        console.error(`Error ${err.error_code}: ${err.error_msg}`);
+      });
+    }
+  }
+}
+```
+
+## Common Patterns
+
+### Collect All Data
+
+```typescript
+async function collectAll<T>(method: string, params: object): Promise<T[]> {
+  const iterator = vk.api.collectIterator({
+    method,
+    params,
+    countPerRequest: 1000
+  });
+  
+  const items: T[] = [];
+  for await (const chunk of iterator) {
+    items.push(...chunk.items);
+  }
+  
+  return items;
+}
+
+// Usage
+const members = await collectAll('groups.getMembers', { group_id: 1 });
+console.log(`Total members: ${members.length}`);
+```
+
+### Collect with Processing
+
+```typescript
+async function collectAndProcess<T>(
+  method: string,
+  params: object,
+  processor: (item: T) => Promise<void>
+): Promise<void> {
+  const iterator = vk.api.collectIterator({
+    method,
+    params,
+    countPerRequest: 1000
+  });
+  
+  for await (const chunk of iterator) {
+    await Promise.all(chunk.items.map(processor));
+  }
+}
+
+// Usage
+await collectAndProcess(
+  'wall.get',
+  { owner_id: -1 },
+  async (post) => {
+    // Process each post
+    await saveToDatabase(post);
+  }
+);
+```
+
+<Accordion title="Source Code Reference">
+The collection utilities are implemented in:
+- `/packages/vk-io/src/collect/iterator.ts:42` - `createCollectIterator` function
+- `/packages/vk-io/src/collect/chain.ts:14` - `Chain` class
+- `/packages/vk-io/src/collect/executes.ts:19` - `executeRequests` function
+</Accordion>

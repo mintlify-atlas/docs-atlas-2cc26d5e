@@ -1,80 +1,414 @@
 ---
-title: "Quickstart"
-description: "Start building awesome documentation in minutes"
+title: Quick Start
+description: Build your first VK bot in minutes with VK-IO - a complete working example from setup to deployment
 ---
 
-## Get started in three steps
+# Quick Start
 
-Get your documentation site running locally and make your first customization.
+Get your first VK bot running in just a few minutes. This guide walks you through creating a simple bot that responds to user messages and commands.
 
-### Step 1: Set up your local environment
+## Prerequisites
 
-<AccordionGroup>
-  <Accordion icon="copy" title="Clone your docs locally">
-    During the onboarding process, you created a GitHub repository with your docs content if you didn't already have one. You can find a link to this repository in your [dashboard](https://dashboard.mintlify.com).
+Before you begin, make sure you have:
+
+- **Node.js 12.20.0+** installed
+- **VK-IO** installed ([Installation Guide](/installation))
+- A **VK Community token** with message permissions ([Get a token](/installation#getting-your-vk-api-token))
+- **Long Poll API** enabled in your community settings
+
+## Your First Bot
+
+Let's create a simple bot that responds to user messages.
+
+<Steps>
+  <Step title="Create your project">
+    Create a new directory and initialize your project:
     
-    To clone the repository locally so that you can make and preview changes to your docs, follow the [Cloning a repository](https://docs.github.com/en/repositories/creating-and-managing-repositories/cloning-a-repository) guide in the GitHub docs.
-  </Accordion>
-  <Accordion icon="rectangle-terminal" title="Start the preview server">
-    1. Install the Mintlify CLI: `npm i -g mint`
-    2. Navigate to your docs directory and run: `mint dev`
-    3. Open `http://localhost:3000` to see your docs live!
+    ```bash
+    mkdir my-vk-bot
+    cd my-vk-bot
+    npm init -y
+    npm install vk-io
+    ```
+  </Step>
+  
+  <Step title="Add your token">
+    Create a `.env` file with your VK token:
     
-    <Tip>Your preview updates automatically as you edit files.</Tip>
-  </Accordion>
-</AccordionGroup>
-
-### Step 2: Deploy your changes
-
-<AccordionGroup>
-  <Accordion icon="github" title="Install our GitHub app">
-    Install the Mintlify GitHub app from your [dashboard](https://dashboard.mintlify.com/settings/organization/github-app).
+    ```bash
+    TOKEN=your_vk_community_token_here
+    ```
     
-    Our GitHub app automatically deploys your changes to your docs site, so you don't need to manage deployments yourself.
-</Accordion>
-<Accordion icon="palette" title="Update your site name and colors">
-    For a first change, let's update the name and colors of your docs site.
+    <Warning>
+      Never commit your `.env` file to version control. Add it to `.gitignore`.
+    </Warning>
+  </Step>
+  
+  <Step title="Create your bot file">
+    Create `bot.js` (or `bot.mjs` for ESM) with the following code:
+    
+    ```javascript
+    import { VK } from 'vk-io';
+    
+    const vk = new VK({
+      token: process.env.TOKEN
+    });
+    
+    vk.updates.on('message_new', async (context) => {
+      await context.send('Hello! You said: ' + context.text);
+    });
+    
+    vk.updates.start().then(() => {
+      console.log('Bot started!');
+    });
+    ```
+  </Step>
+  
+  <Step title="Run your bot">
+    Start your bot:
+    
+    ```bash
+    TOKEN=your_token_here node bot.js
+    ```
+    
+    <Tip>
+      You should see "Bot started!" in the console. Send a message to your community, and the bot will echo it back!
+    </Tip>
+  </Step>
+</Steps>
 
-    1. Open `docs.json` in your editor.
-    2. Change the `"name"` field to your project name.
-    3. Update the `"colors"` to match your brand.
-    4. Save and see your changes instantly at `http://localhost:3000`.
+## Adding Commands
 
-    <Tip>Try changing the primary color to see an immediate difference!</Tip>
-  </Accordion>
-</AccordionGroup>
+Let's make the bot more interactive by adding command support using the `@vk-io/hear` package.
 
-### Step 3: Go live
+<Steps>
+  <Step title="Install @vk-io/hear">
+    ```bash
+    npm install @vk-io/hear
+    ```
+  </Step>
+  
+  <Step title="Create a bot with commands">
+    Update your `bot.js`:
+    
+    ```javascript
+    import { VK } from 'vk-io';
+    import { HearManager } from '@vk-io/hear';
+    
+    const vk = new VK({
+      token: process.env.TOKEN
+    });
+    
+    const hearManager = new HearManager();
+    
+    // Connect the hear manager to updates
+    vk.updates.on('message_new', hearManager.middleware);
+    
+    // Command: /start
+    hearManager.hear('/start', async (context) => {
+      await context.send(`
+        Welcome! 🎉
+        
+        Available commands:
+        /start - Show this message
+        /time - Get current time
+        /cat - Get a random cat photo
+        /reverse <text> - Reverse your text
+      `);
+    });
+    
+    // Command: /time or /date
+    hearManager.hear(['/time', '/date'], async (context) => {
+      await context.send(String(new Date()));
+    });
+    
+    // Command: /cat
+    hearManager.hear('/cat', async (context) => {
+      await context.send('Loading your cat... 😺');
+      
+      await context.sendPhotos({
+        value: 'https://loremflickr.com/400/300/cat'
+      });
+    });
+    
+    // Command: /reverse with regex
+    hearManager.hear(/^\/reverse (.+)/i, async (context) => {
+      const text = context.$match[1];
+      const reversed = text.split('').reverse().join('');
+      
+      await context.send(reversed);
+    });
+    
+    // Default handler for unknown messages
+    vk.updates.on('message_new', async (context) => {
+      await context.send('Unknown command. Type /start for help.');
+    });
+    
+    vk.updates.start().then(() => {
+      console.log('Bot started with commands!');
+    }).catch(console.error);
+    ```
+  </Step>
+  
+  <Step title="Test your commands">
+    Run the bot and try these commands:
+    - `/start` - Shows the help message
+    - `/time` - Returns the current date and time
+    - `/cat` - Sends a random cat photo
+    - `/reverse hello` - Returns "olleh"
+  </Step>
+</Steps>
 
-<Accordion icon="rocket" title="Publish your docs">
-  1. Commit and push your changes.
-  2. Your docs will update and be live in moments!
-</Accordion>
+## Adding a Keyboard
 
-## Next steps
+Make your bot even more user-friendly by adding interactive keyboards.
 
-Now that you have your docs running, explore these key features:
+```javascript
+import { VK, Keyboard } from 'vk-io';
+import { HearManager } from '@vk-io/hear';
 
-<CardGroup cols={2}>
+const vk = new VK({
+  token: process.env.TOKEN
+});
 
-<Card title="Write Content" icon="pen-to-square" href="/essentials/markdown">
-  Learn MDX syntax and start writing your documentation.
-</Card>
+const hearManager = new HearManager();
 
-<Card title="Customize style" icon="palette" href="/essentials/settings">
-  Make your docs match your brand perfectly.
-</Card>
+// Handle button payloads
+vk.updates.on('message_new', (context, next) => {
+  const { messagePayload } = context;
+  
+  // Set command from button payload
+  context.state.command = messagePayload?.command || null;
+  
+  return next();
+});
 
-<Card title="Add code examples" icon="square-code" href="/essentials/code">
-  Include syntax-highlighted code blocks.
-</Card>
+vk.updates.on('message_new', hearManager.middleware);
 
-<Card title="API documentation" icon="code" href="/api-reference/introduction">
-  Auto-generate API docs from OpenAPI specs.
-</Card>
+// Custom helper for commands that work with both text and buttons
+const hearCommand = (name, conditions, handle) => {
+  if (typeof handle !== 'function') {
+    handle = conditions;
+    conditions = [`/${name}`];
+  }
+  
+  if (!Array.isArray(conditions)) {
+    conditions = [conditions];
+  }
+  
+  hearManager.hear(
+    [(_text, { state }) => state.command === name, ...conditions],
+    handle
+  );
+};
 
-</CardGroup>
+// /start command with keyboard
+hearCommand('start', async (context) => {
+  await context.send({
+    message: `
+      Welcome! 👋
+      
+      Use the buttons below or type commands:
+      /help - Show help
+      /time - Current time
+      /cat - Random cat photo
+    `,
+    keyboard: Keyboard.builder()
+      .textButton({
+        label: 'Help',
+        payload: { command: 'help' },
+        color: Keyboard.SECONDARY_COLOR
+      })
+      .row()
+      .textButton({
+        label: 'Current Time',
+        payload: { command: 'time' },
+        color: Keyboard.PRIMARY_COLOR
+      })
+      .row()
+      .textButton({
+        label: 'Cat Photo 😺',
+        payload: { command: 'cat' },
+        color: Keyboard.POSITIVE_COLOR
+      })
+  });
+});
+
+hearCommand('help', async (context) => {
+  await context.send('Type /start to see the menu!');
+});
+
+hearCommand('time', ['/time', '/date'], async (context) => {
+  await context.send(`Current time: ${new Date().toLocaleString()}`);
+});
+
+hearCommand('cat', async (context) => {
+  await context.send('Loading... 😺');
+  
+  await context.sendPhotos({
+    value: 'https://loremflickr.com/400/300/cat'
+  });
+});
+
+vk.updates.start().then(() => {
+  console.log('Bot started with keyboard!');
+}).catch(console.error);
+```
 
 <Note>
-  **Need help?** See our [full documentation](https://mintlify.com/docs) or join our [community](https://mintlify.com/community).
+  Keyboards in VK can be **persistent** (always shown) or **inline** (one-time use). Use `.inline()` when building the keyboard for one-time buttons.
 </Note>
+
+## Understanding the Code
+
+Let's break down the key components:
+
+### VK Instance
+
+```javascript
+const vk = new VK({
+  token: process.env.TOKEN
+});
+```
+
+The `VK` class is your main entry point. It provides three key properties:
+- `vk.api` - Make direct API calls to any VK method
+- `vk.updates` - Handle incoming events (messages, posts, etc.)
+- `vk.upload` - Upload photos, documents, and other files
+
+### Updates & Events
+
+```javascript
+vk.updates.on('message_new', async (context) => {
+  // Handle new messages
+});
+
+vk.updates.start();
+```
+
+The updates module listens for events from VK using Long Poll API. Common events:
+- `message_new` - New message received
+- `message_reply` - Message reply from community
+- `wall_post_new` - New wall post
+- `group_join` - User joined the community
+
+### Message Context
+
+The `context` object provides everything you need to interact with messages:
+
+```javascript
+context.text        // Message text
+context.senderId    // User who sent the message
+context.peerId      // Chat or user ID
+context.send()      // Send a message
+context.reply()     // Reply to the message
+context.sendPhotos() // Send photos
+context.messagePayload // Button payload data
+```
+
+### Keyboard Builder
+
+```javascript
+Keyboard.builder()
+  .textButton({ label: 'Click me', payload: { action: 'click' } })
+  .row()  // Start a new row
+  .textButton({ label: 'Another button', color: Keyboard.PRIMARY_COLOR })
+```
+
+Keyboard colors:
+- `Keyboard.PRIMARY_COLOR` - Blue (main action)
+- `Keyboard.SECONDARY_COLOR` - White (secondary action)
+- `Keyboard.POSITIVE_COLOR` - Green (confirm, agree)
+- `Keyboard.NEGATIVE_COLOR` - Red (delete, reject)
+
+## Making API Calls
+
+You can call any VK API method directly:
+
+```javascript
+// Get user information
+const users = await vk.api.users.get({
+  user_ids: [1, 2, 3],
+  fields: ['photo_100', 'city']
+});
+
+// Post to wall
+await vk.api.wall.post({
+  owner_id: -123456, // Your community ID (negative for communities)
+  message: 'Hello from VK-IO!',
+  attachments: 'photo-123456_789'
+});
+
+// Send a message
+await vk.api.messages.send({
+  peer_id: 123456,
+  message: 'Hello!',
+  random_id: 0
+});
+```
+
+<Tip>
+  VK-IO automatically handles rate limits and request parallelization for you. Make as many API calls as you need!
+</Tip>
+
+## Next Steps
+
+You now have a working VK bot! Here's what to explore next:
+
+<CardGroup cols={2}>
+  <Card title="Updates Guide" icon="bolt" href="/core/updates">
+    Learn about all available events and how to handle them
+  </Card>
+  <Card title="Keyboard Guide" icon="keyboard" href="/core/keyboard">
+    Master keyboard creation with buttons and layouts
+  </Card>
+  <Card title="Uploads" icon="upload" href="/core/upload">
+    Upload photos, documents, audio, and videos
+  </Card>
+  <Card title="Sessions & Scenes" icon="layer-group" href="/ecosystem/session">
+    Build conversational flows with state management
+  </Card>
+  <Card title="API Reference" icon="code" href="/api-reference/vk">
+    Explore the complete API documentation
+  </Card>
+  <Card title="Examples" icon="lightbulb" href="/examples/simple-bot">
+    See real-world bot implementations
+  </Card>
+</CardGroup>
+
+## Common Issues
+
+<AccordionGroup>
+  <Accordion title="Bot doesn't respond to messages">
+    Make sure:
+    - Long Poll API is enabled in your community settings
+    - Messages are enabled for the community
+    - Your token has the `messages` permission
+    - The bot is running without errors (`console.log` the context to debug)
+  </Accordion>
+  
+  <Accordion title="'TOKEN is not defined' error">
+    Your environment variable isn't set. Either:
+    - Use `TOKEN=your_token node bot.js` when running
+    - Or install `dotenv` and load it: `require('dotenv').config()`
+  </Accordion>
+  
+  <Accordion title="Keyboard not showing">
+    Keyboards only appear in private messages and community chats. Make sure:
+    - You're testing in a private message to your community
+    - The keyboard is properly built with `.builder()`
+    - You're passing it in the options: `{ keyboard: Keyboard.builder()... }`
+  </Accordion>
+  
+  <Accordion title="Photos not uploading">
+    Check that:
+    - The URL is publicly accessible
+    - You're using `context.sendPhotos()` or `context.sendDocuments()`
+    - Your token has the necessary permissions
+    - The file format is supported (JPG, PNG, GIF for photos)
+  </Accordion>
+</AccordionGroup>
+
+<Tip>
+  Need help? Check out the [examples directory](https://github.com/negezor/vk-io/tree/master/docs/examples) for more real-world code samples!
+</Tip>

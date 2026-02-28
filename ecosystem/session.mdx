@@ -1,0 +1,492 @@
+---
+title: Session
+description: Manage user sessions and state across conversations
+icon: database
+---
+
+The `@vk-io/session` package provides a simple and flexible way to manage user sessions in your VK bot. It allows you to store and retrieve user-specific data across multiple messages and conversations.
+
+## Installation
+
+<CodeGroup>
+```bash npm
+npm install @vk-io/session
+```
+
+```bash yarn
+yarn add @vk-io/session
+```
+
+```bash pnpm
+pnpm add @vk-io/session
+```
+</CodeGroup>
+
+<Note>
+  Node.js 12.20.0 or newer is required.
+</Note>
+
+## Quick Start
+
+The session manager automatically attaches a `session` object to your message context:
+
+```typescript
+import { VK } from 'vk-io';
+import { SessionManager } from '@vk-io/session';
+
+const vk = new VK({ token: process.env.TOKEN });
+
+const sessionManager = new SessionManager();
+
+vk.updates.on('message_new', sessionManager.middleware);
+
+vk.updates.on('message_new', async (context) => {
+  if (context.text === '/counter') {
+    // Access session data
+    if (!context.session.counter) {
+      context.session.counter = 0;
+    }
+    
+    context.session.counter += 1;
+    
+    await context.send(`You've used this command ${context.session.counter} times`);
+  }
+});
+
+vk.updates.start();
+```
+
+## How It Works
+
+The session manager:
+
+1. Intercepts incoming messages through middleware
+2. Loads session data for the user from storage
+3. Attaches the session to the context object
+4. Automatically saves changes when the handler completes
+
+<Note>
+  By default, sessions are stored in memory and will be lost when your bot restarts. Use custom storage for persistence.
+</Note>
+
+## Configuration
+
+Create a session manager with custom options:
+
+```typescript
+import { SessionManager, MemoryStorage } from '@vk-io/session';
+
+const sessionManager = new SessionManager({
+  storage: new MemoryStorage(),
+  contextKey: 'session',
+  getStorageKey: (context) => String(context.senderId)
+});
+```
+
+### Options
+
+<ParamField path="storage" type="ISessionStorage" default="MemoryStorage">
+  Storage adapter for persisting session data
+</ParamField>
+
+<ParamField path="contextKey" type="string" default="'session'">
+  Property name for accessing session in context (e.g., `context.session`)
+</ParamField>
+
+<ParamField path="getStorageKey" type="(context) => string">
+  Function to generate storage key from context. Defaults to `context.senderId`
+</ParamField>
+
+## Storage Options
+
+### Memory Storage (Default)
+
+Stores sessions in memory. Data is lost when the process restarts:
+
+```typescript
+import { SessionManager, MemoryStorage } from '@vk-io/session';
+
+const sessionManager = new SessionManager({
+  storage: new MemoryStorage()
+});
+```
+
+### Custom Storage
+
+Implement your own storage by following the `ISessionStorage` interface:
+
+```typescript
+interface ISessionStorage {
+  get(key: string): Promise<object | undefined>;
+  set(key: string, value: object): Promise<boolean>;
+  delete(key: string): Promise<boolean>;
+  touch(key: string): Promise<void>;
+}
+```
+
+#### Redis Storage Example
+
+```typescript
+import Redis from 'ioredis';
+
+class RedisStorage {
+  private redis: Redis;
+  private ttl: number;
+
+  constructor(options = {}) {
+    this.redis = new Redis(options.redis);
+    this.ttl = options.ttl || 3600; // 1 hour default
+  }
+
+  async get(key: string): Promise<object | undefined> {
+    const data = await this.redis.get(key);
+    return data ? JSON.parse(data) : undefined;
+  }
+
+  async set(key: string, value: object): Promise<boolean> {
+    const serialized = JSON.stringify(value);
+    await this.redis.setex(key, this.ttl, serialized);
+    return true;
+  }
+
+  async delete(key: string): Promise<boolean> {
+    await this.redis.del(key);
+    return true;
+  }
+
+  async touch(key: string): Promise<void> {
+    await this.redis.expire(key, this.ttl);
+  }
+}
+
+const sessionManager = new SessionManager({
+  storage: new RedisStorage({
+    redis: { host: 'localhost', port: 6379 },
+    ttl: 7200 // 2 hours
+  })
+});
+```
+
+<Note>
+  Check out [vk-io-redis-storage](https://github.com/xtcry/vk-io-redis-storage) for a ready-to-use Redis storage implementation.
+</Note>
+
+## Usage Patterns
+
+### Counter Example
+
+Track how many times a user has interacted with the bot:
+
+```typescript
+vk.updates.on('message_new', sessionManager.middleware);
+
+vk.updates.on('message_new', async (context) => {
+  if (!context.session.messageCount) {
+    context.session.messageCount = 0;
+  }
+  
+  context.session.messageCount += 1;
+  
+  await context.send(
+    `This is message #${context.session.messageCount} from you`
+  );
+});
+```
+
+### User Preferences
+
+Store user settings and preferences:
+
+```typescript
+vk.updates.on('message_new', async (context) => {
+  if (context.text?.startsWith('/lang ')) {
+    const lang = context.text.split(' ')[1];
+    context.session.language = lang;
+    
+    await context.send(`Language set to: ${lang}`);
+    return;
+  }
+  
+  const userLang = context.session.language || 'en';
+  const greeting = userLang === 'ru' ? 'Привет!' : 'Hello!';
+  
+  await context.send(greeting);
+});
+```
+
+### Multi-Step Forms
+
+Collect information across multiple messages:
+
+```typescript
+vk.updates.on('message_new', async (context) => {
+  const { session } = context;
+  
+  if (context.text === '/register') {
+    session.registrationStep = 'name';
+    await context.send('What is your name?');
+    return;
+  }
+  
+  if (session.registrationStep === 'name') {
+    session.userName = context.text;
+    session.registrationStep = 'age';
+    await context.send('How old are you?');
+    return;
+  }
+  
+  if (session.registrationStep === 'age') {
+    session.userAge = context.text;
+    session.registrationStep = null;
+    
+    await context.send(
+      `Thanks! Name: ${session.userName}, Age: ${session.userAge}`
+    );
+  }
+});
+```
+
+<Note>
+  For complex multi-step workflows, consider using [@vk-io/scenes](/ecosystem/scenes) instead.
+</Note>
+
+### Shopping Cart
+
+Maintain a shopping cart across messages:
+
+```typescript
+vk.updates.on('message_new', async (context) => {
+  if (!context.session.cart) {
+    context.session.cart = [];
+  }
+  
+  if (context.text?.startsWith('/add ')) {
+    const item = context.text.substring(5);
+    context.session.cart.push(item);
+    
+    await context.send(`Added "${item}" to cart. Total items: ${context.session.cart.length}`);
+  }
+  
+  if (context.text === '/cart') {
+    if (context.session.cart.length === 0) {
+      await context.send('Your cart is empty');
+    } else {
+      await context.send(`Your cart:\n${context.session.cart.join('\n')}`);
+    }
+  }
+  
+  if (context.text === '/clear') {
+    context.session.cart = [];
+    await context.send('Cart cleared');
+  }
+});
+```
+
+## Advanced Usage
+
+### Custom Storage Keys
+
+Use different keys for different contexts:
+
+```typescript
+const sessionManager = new SessionManager({
+  getStorageKey: (context) => {
+    // Use peer ID for group chats, sender ID for private messages
+    if (context.isChat) {
+      return `chat_${context.peerId}`;
+    }
+    return `user_${context.senderId}`;
+  }
+});
+```
+
+### Multiple Session Types
+
+Create separate session managers for different purposes:
+
+```typescript
+const userSession = new SessionManager({
+  contextKey: 'userSession',
+  getStorageKey: (context) => `user_${context.senderId}`
+});
+
+const chatSession = new SessionManager({
+  contextKey: 'chatSession',
+  getStorageKey: (context) => `chat_${context.peerId}`
+});
+
+vk.updates.on('message_new', userSession.middleware);
+vk.updates.on('message_new', chatSession.middleware);
+
+vk.updates.on('message_new', async (context) => {
+  // Access both sessions
+  context.userSession.lastCommand = context.text;
+  context.chatSession.messageCount = (context.chatSession.messageCount || 0) + 1;
+});
+```
+
+### Force Update
+
+Manually trigger session save using `$forceUpdate()`:
+
+```typescript
+vk.updates.on('message_new', async (context) => {
+  context.session.data = 'some value';
+  
+  // Manually force save before async operation
+  await context.session.$forceUpdate();
+  
+  // Long async operation
+  await longRunningTask();
+});
+```
+
+### TypeScript Support
+
+Define session structure with TypeScript:
+
+```typescript
+interface UserSession {
+  messageCount: number;
+  language: string;
+  cart: string[];
+  lastCommand?: string;
+}
+
+const sessionManager = new SessionManager<UserSession>();
+
+vk.updates.on('message_new', sessionManager.middleware);
+
+vk.updates.on('message_new', async (context) => {
+  // TypeScript knows the session structure
+  context.session.messageCount = (context.session.messageCount || 0) + 1;
+  context.session.language = context.session.language || 'en';
+});
+```
+
+## Session Lifecycle
+
+<Steps>
+  <Step title="Request Received">
+    A new message arrives and triggers the middleware chain
+  </Step>
+  
+  <Step title="Load Session">
+    Session manager loads existing session data from storage using the storage key
+  </Step>
+  
+  <Step title="Attach to Context">
+    Session data is wrapped in a Proxy and attached to the context
+  </Step>
+  
+  <Step title="Handler Execution">
+    Your message handler runs and can read/write to `context.session`
+  </Step>
+  
+  <Step title="Auto-Save">
+    After handler completes, changed session data is automatically saved to storage
+  </Step>
+</Steps>
+
+## Best Practices
+
+<CardGroup cols={2}>
+  <Card title="Initialize Data" icon="check">
+    Always check if session properties exist before using them
+    
+    ```typescript
+    if (!context.session.counter) {
+      context.session.counter = 0;
+    }
+    ```
+  </Card>
+  
+  <Card title="Use Persistent Storage" icon="database">
+    In production, use Redis or another persistent storage instead of memory
+  </Card>
+  
+  <Card title="Set TTL" icon="clock">
+    Configure time-to-live for sessions to automatically clean up inactive users
+  </Card>
+  
+  <Card title="Keep Sessions Small" icon="weight">
+    Store only essential data in sessions. Use a database for large datasets
+  </Card>
+</CardGroup>
+
+## Complete Example
+
+```typescript
+import { VK } from 'vk-io';
+import { SessionManager } from '@vk-io/session';
+
+interface BotSession {
+  messageCount: number;
+  userName?: string;
+  preferences: {
+    language: string;
+    notifications: boolean;
+  };
+}
+
+const vk = new VK({ token: process.env.TOKEN });
+const sessionManager = new SessionManager<BotSession>();
+
+vk.updates.on('message_new', sessionManager.middleware);
+
+vk.updates.on('message_new', async (context) => {
+  const { session } = context;
+  
+  // Initialize session
+  if (!session.messageCount) {
+    session.messageCount = 0;
+    session.preferences = {
+      language: 'en',
+      notifications: true
+    };
+  }
+  
+  session.messageCount += 1;
+  
+  // Handle commands
+  if (context.text === '/start') {
+    await context.send(
+      `Welcome! You've sent ${session.messageCount} messages.`
+    );
+    return;
+  }
+  
+  if (context.text?.startsWith('/setname ')) {
+    session.userName = context.text.substring(9);
+    await context.send(`Name set to: ${session.userName}`);
+    return;
+  }
+  
+  if (context.text === '/profile') {
+    await context.send(
+      `Profile:\n` +
+      `Name: ${session.userName || 'Not set'}\n` +
+      `Messages: ${session.messageCount}\n` +
+      `Language: ${session.preferences.language}`
+    );
+    return;
+  }
+  
+  if (context.text === '/reset') {
+    // Clear session by replacing it
+    context.session = {};
+    await context.send('Session reset');
+    return;
+  }
+});
+
+vk.updates.start().catch(console.error);
+```
+
+## Community Storage Adapters
+
+- [vk-io-redis-storage](https://github.com/xtcry/vk-io-redis-storage) - Redis storage adapter
+
+<Note>
+  Have you created a storage adapter? [Open an issue](https://github.com/negezor/vk-io/issues/new) to add it to this list!
+</Note>

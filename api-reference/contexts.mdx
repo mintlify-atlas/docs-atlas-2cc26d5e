@@ -1,0 +1,755 @@
+---
+title: 'Contexts'
+description: 'Context classes for handling VK events and updates'
+---
+
+# Contexts
+
+Context classes represent different types of VK events and updates. All contexts extend the base `Context` class and provide type-safe access to event data.
+
+## Base Context Class
+
+The foundational class for all event contexts.
+
+### Properties
+
+<ResponseField name="type" type="string">
+  The context type (e.g., 'message', 'message_event', 'wall_post')
+</ResponseField>
+
+<ResponseField name="subTypes" type="string[]">
+  Array of sub-types (e.g., ['message_new'], ['message_edit'])
+</ResponseField>
+
+<ResponseField name="state" type="S">
+  Custom state object for storing data across middleware
+</ResponseField>
+
+<ResponseField name="$groupId" type="number | undefined">
+  Group ID for group events
+</ResponseField>
+
+### Methods
+
+#### is(types)
+
+Checks if the context matches any of the specified types or sub-types.
+
+<ParamField path="types" type="(Type | SubType)[]" required>
+  Array of types to check against
+</ParamField>
+
+```typescript
+if (context.is(['message', 'message_new'])) {
+  // Handle message
+}
+```
+
+**Returns:** `boolean`
+
+#### toJSON()
+
+Returns JSON representation of the context.
+
+**Returns:** `object`
+
+---
+
+## MessageContext
+
+Represents an incoming or outgoing message.
+
+### Type
+
+- **type:** `'message'`
+- **subTypes:** `'message_new'` | `'message_edit'` | `'message_reply'` | event types
+
+### Properties
+
+<ResponseField name="id" type="number">
+  Message ID
+</ResponseField>
+
+<ResponseField name="conversationMessageId" type="number">
+  Message ID within the conversation
+</ResponseField>
+
+<ResponseField name="peerId" type="number">
+  Destination ID (user, chat, or community)
+</ResponseField>
+
+<ResponseField name="senderId" type="number">
+  Sender ID
+</ResponseField>
+
+<ResponseField name="text" type="string | undefined">
+  Message text
+</ResponseField>
+
+<ResponseField name="createdAt" type="number">
+  Message timestamp
+</ResponseField>
+
+<ResponseField name="isOutbox" type="boolean">
+  Whether the message is outgoing
+</ResponseField>
+
+<ResponseField name="isImportant" type="boolean">
+  Whether the message is marked as important
+</ResponseField>
+
+<ResponseField name="hasText" type="boolean">
+  Whether the message has text
+</ResponseField>
+
+<ResponseField name="hasReplyMessage" type="boolean">
+  Whether the message is a reply
+</ResponseField>
+
+<ResponseField name="hasForwards" type="boolean">
+  Whether the message has forwarded messages
+</ResponseField>
+
+<ResponseField name="hasMessagePayload" type="boolean">
+  Whether the message has a payload
+</ResponseField>
+
+<ResponseField name="hasGeo" type="boolean">
+  Whether the message has geolocation
+</ResponseField>
+
+<ResponseField name="isChat" type="boolean">
+  Whether the message is from a chat
+</ResponseField>
+
+<ResponseField name="isUser" type="boolean">
+  Whether the sender is a user
+</ResponseField>
+
+<ResponseField name="isGroup" type="boolean">
+  Whether the sender is a group
+</ResponseField>
+
+<ResponseField name="isEvent" type="boolean">
+  Whether this is a service message (chat event)
+</ResponseField>
+
+<ResponseField name="eventType" type="MessageContextPayloadEventType | undefined">
+  Event type for service messages
+</ResponseField>
+
+<ResponseField name="eventMemberId" type="number | undefined">
+  User ID involved in the event
+</ResponseField>
+
+<ResponseField name="eventText" type="string | undefined">
+  Event text (e.g., new chat title)
+</ResponseField>
+
+<ResponseField name="attachments" type="(Attachment | ExternalAttachment)[]">
+  Message attachments
+</ResponseField>
+
+<ResponseField name="forwards" type="MessageForwardsCollection">
+  Forwarded messages collection
+</ResponseField>
+
+<ResponseField name="replyMessage" type="MessageContext | undefined">
+  Reply message context
+</ResponseField>
+
+<ResponseField name="messagePayload" type="any">
+  Message payload (from keyboards)
+</ResponseField>
+
+<ResponseField name="geo" type="object | undefined">
+  Geolocation data
+</ResponseField>
+
+<ResponseField name="$match" type="RegExpMatchArray">
+  Regex match result (from hear middleware)
+</ResponseField>
+
+### Methods
+
+#### loadMessagePayload(options?)
+
+Loads full message data from VK API if not already loaded.
+
+<ParamField path="options.force" type="boolean" default="false">
+  Force reload even if already loaded
+</ParamField>
+
+```typescript
+await message.loadMessagePayload();
+console.log(message.attachments);
+```
+
+**Returns:** `Promise<void>`
+
+#### send(text, params?)
+
+Sends a message to the same conversation.
+
+<ParamField path="text" type="string | IMessageContextSendOptions" required>
+  Message text or options object
+</ParamField>
+
+<ParamField path="params" type="IMessageContextSendOptions">
+  Additional send parameters
+</ParamField>
+
+```typescript
+await context.send('Hello!');
+
+await context.send('Hello!', {
+  attachment: 'photo123_456',
+  keyboard: Keyboard.builder()
+    .textButton({ label: 'Button' })
+    .toString(),
+});
+
+await context.send({
+  message: 'Hello!',
+  sticker_id: 123,
+});
+```
+
+**Returns:** `Promise<MessageContext>`
+
+#### reply(text, params?)
+
+Replies to the message.
+
+<ParamField path="text" type="string | IMessageContextSendOptions" required>
+  Reply text or options object
+</ParamField>
+
+<ParamField path="params" type="IMessageContextSendOptions">
+  Additional send parameters
+</ParamField>
+
+```typescript
+await context.reply('This is a reply');
+```
+
+**Returns:** `Promise<MessageContext>`
+
+#### sendSticker(stickerId)
+
+Sends a sticker to the conversation.
+
+<ParamField path="stickerId" type="number" required>
+  Sticker ID
+</ParamField>
+
+```typescript
+await context.sendSticker(123);
+```
+
+**Returns:** `Promise<MessageContext>`
+
+#### sendPhoto(source, params?)
+
+Uploads and sends a photo.
+
+<ParamField path="source" type="IUploadSourceMedia" required>
+  Photo source (file path, buffer, stream, or URL)
+</ParamField>
+
+<ParamField path="params" type="IMessageContextSendOptions">
+  Additional send parameters
+</ParamField>
+
+```typescript
+await context.sendPhoto('./photo.jpg', {
+  message: 'Check this out!',
+});
+```
+
+**Returns:** `Promise<MessageContext>`
+
+#### sendDocument(source, params?)
+
+Uploads and sends a document.
+
+<ParamField path="source" type="IUploadSourceMedia" required>
+  Document source
+</ParamField>
+
+<ParamField path="params" type="IMessageContextSendOptions">
+  Additional send parameters
+</ParamField>
+
+**Returns:** `Promise<MessageContext>`
+
+#### sendAudioMessage(source, params?)
+
+Uploads and sends a voice message.
+
+<ParamField path="source" type="IUploadSourceMedia" required>
+  Audio source (must be OGG format)
+</ParamField>
+
+<ParamField path="params" type="IMessageContextSendOptions">
+  Additional send parameters
+</ParamField>
+
+**Returns:** `Promise<MessageContext>`
+
+#### markAsRead()
+
+Marks the message as read.
+
+```typescript
+await context.markAsRead();
+```
+
+**Returns:** `Promise<1>`
+
+#### editMessage(options)
+
+Edits the message (only for messages sent by the bot).
+
+<ParamField path="options" type="object" required>
+  Edit parameters (message, attachment, keyboard, etc.)
+</ParamField>
+
+```typescript
+await context.editMessage({
+  message: 'Updated text',
+});
+```
+
+**Returns:** `Promise<1>`
+
+#### deleteMessage(options?)
+
+Deletes the message.
+
+<ParamField path="options" type="object">
+  Delete options (spam, delete_for_all)
+</ParamField>
+
+```typescript
+await context.deleteMessage({ delete_for_all: 1 });
+```
+
+**Returns:** `Promise<1>`
+
+#### renameChat(title)
+
+Renames the chat (only works in chats).
+
+<ParamField path="title" type="string" required>
+  New chat title
+</ParamField>
+
+**Returns:** `Promise<1>`
+
+#### setActivity()
+
+Sets "typing" activity in the conversation.
+
+```typescript
+await context.setActivity();
+```
+
+**Returns:** `Promise<1>`
+
+### IMessageContextSendOptions
+
+<Expandable title="Send Options">
+  <ResponseField name="message" type="string">
+    Message text
+  </ResponseField>
+  <ResponseField name="attachment" type="AllowArray<Attachment | string>">
+    Attachments to send
+  </ResponseField>
+  <ResponseField name="keyboard" type="KeyboardBuilder | string">
+    Keyboard to attach
+  </ResponseField>
+  <ResponseField name="sticker_id" type="number">
+    Sticker ID
+  </ResponseField>
+  <ResponseField name="lat" type="number">
+    Latitude for geolocation
+  </ResponseField>
+  <ResponseField name="long" type="number">
+    Longitude for geolocation
+  </ResponseField>
+  <ResponseField name="reply_to" type="number">
+    Message ID to reply to
+  </ResponseField>
+  <ResponseField name="forward_messages" type="number[]">
+    Message IDs to forward
+  </ResponseField>
+  <ResponseField name="forward" type="string">
+    Forward JSON
+  </ResponseField>
+  <ResponseField name="dont_parse_links" type="0 | 1">
+    Don't parse links in the message
+  </ResponseField>
+  <ResponseField name="disable_mentions" type="0 | 1">
+    Disable mentions
+  </ResponseField>
+</Expandable>
+
+### Usage Example
+
+```typescript
+import { MessageContext } from 'vk-io';
+
+vk.updates.on('message_new', async (context: MessageContext) => {
+  if (context.hasText && context.text === '/start') {
+    await context.send('Welcome!', {
+      keyboard: Keyboard.builder()
+        .textButton({ label: 'Help' })
+        .toString(),
+    });
+  }
+
+  if (context.hasAttachments) {
+    for (const attachment of context.attachments) {
+      if (attachment.type === 'photo') {
+        console.log('Received photo:', attachment.toString());
+      }
+    }
+  }
+
+  if (context.hasReplyMessage) {
+    await context.send('Thanks for replying!');
+  }
+});
+```
+
+---
+
+## MessageEventContext
+
+Represents a callback button click event.
+
+### Type
+
+- **type:** `'message_event'`
+- **subTypes:** `'message_event'`
+
+### Properties
+
+<ResponseField name="userId" type="number">
+  User ID who clicked the button
+</ResponseField>
+
+<ResponseField name="peerId" type="number">
+  Conversation ID
+</ResponseField>
+
+<ResponseField name="conversationMessageId" type="number">
+  Message ID within the conversation
+</ResponseField>
+
+<ResponseField name="eventId" type="string">
+  Event ID (valid for 1 minute)
+</ResponseField>
+
+<ResponseField name="eventPayload" type="any">
+  Button payload
+</ResponseField>
+
+### Methods
+
+#### answer(eventData)
+
+Sends an event answer (shows snackbar, opens link, or opens app).
+
+<ParamField path="eventData" type="MessageEventAction" required>
+  Event action to perform
+</ParamField>
+
+```typescript
+// Show snackbar
+await context.answer({
+  type: 'show_snackbar',
+  text: 'Button clicked!',
+});
+
+// Open link
+await context.answer({
+  type: 'open_link',
+  link: 'https://example.com',
+});
+
+// Open VK app
+await context.answer({
+  type: 'open_app',
+  app_id: 123,
+  hash: 'navigation',
+});
+```
+
+**Returns:** `Promise<1>`
+
+#### send(text, params?)
+
+Sends a message to the conversation.
+
+<ParamField path="text" type="string | IMessageContextSendOptions" required>
+  Message text or options
+</ParamField>
+
+**Returns:** `Promise<MessageContext>`
+
+### MessageEventAction Types
+
+<Expandable title="IMessageEventShowSnackbar">
+  <ResponseField name="type" type="'show_snackbar'" required />
+  <ResponseField name="text" type="string" required>
+    Text to display in snackbar
+  </ResponseField>
+</Expandable>
+
+<Expandable title="IMessageEventOpenLink">
+  <ResponseField name="type" type="'open_link'" required />
+  <ResponseField name="link" type="string" required>
+    URL to open
+  </ResponseField>
+</Expandable>
+
+<Expandable title="IMessageEventOpenApp">
+  <ResponseField name="type" type="'open_app'" required />
+  <ResponseField name="app_id" type="number" required>
+    VK App ID
+  </ResponseField>
+  <ResponseField name="owner_id" type="number">
+    Community ID
+  </ResponseField>
+  <ResponseField name="hash" type="string" required>
+    Navigation hash
+  </ResponseField>
+</Expandable>
+
+### Usage Example
+
+```typescript
+import { MessageEventContext } from 'vk-io';
+
+vk.updates.on('message_event', async (context: MessageEventContext) => {
+  const { eventPayload } = context;
+
+  if (eventPayload.action === 'like') {
+    await context.answer({
+      type: 'show_snackbar',
+      text: 'Thanks for liking!',
+    });
+  }
+
+  if (eventPayload.action === 'buy') {
+    await context.answer({
+      type: 'open_link',
+      link: 'https://shop.example.com',
+    });
+  }
+});
+```
+
+---
+
+## WallPostContext
+
+Represents a wall post event.
+
+### Type
+
+- **type:** `'wall_post'`
+- **subTypes:** `'wall_post_new'` | `'wall_repost'`
+
+### Properties
+
+<ResponseField name="id" type="number">
+  Post ID
+</ResponseField>
+
+<ResponseField name="ownerId" type="number">
+  Wall owner ID
+</ResponseField>
+
+<ResponseField name="fromId" type="number">
+  Author ID
+</ResponseField>
+
+<ResponseField name="createdAt" type="number">
+  Post timestamp
+</ResponseField>
+
+<ResponseField name="text" type="string">
+  Post text
+</ResponseField>
+
+<ResponseField name="signerId" type="number | undefined">
+  Signer ID (if signed)
+</ResponseField>
+
+<ResponseField name="attachments" type="(Attachment | ExternalAttachment)[]">
+  Post attachments
+</ResponseField>
+
+<ResponseField name="isRepost" type="boolean">
+  Whether the post is a repost
+</ResponseField>
+
+---
+
+## CommentContext
+
+Represents a comment event (wall, photo, video, market).
+
+### Type
+
+- **type:** `'comment'`
+- **subTypes:** Various comment types
+
+### Properties
+
+<ResponseField name="id" type="number">
+  Comment ID
+</ResponseField>
+
+<ResponseField name="ownerId" type="number">
+  Owner ID
+</ResponseField>
+
+<ResponseField name="fromId" type="number">
+  Author ID
+</ResponseField>
+
+<ResponseField name="text" type="string">
+  Comment text
+</ResponseField>
+
+<ResponseField name="attachments" type="(Attachment | ExternalAttachment)[]">
+  Comment attachments
+</ResponseField>
+
+---
+
+## Other Context Types
+
+VK-IO provides many other context types:
+
+- **TypingContext** - User typing events
+- **VoteContext** - Poll vote events
+- **GroupMemberContext** - Group join/leave events
+- **GroupUserContext** - User block/unblock events
+- **LikeContext** - Like add/remove events
+- **MarketOrderContext** - Market order events
+- **MessageFlagsContext** - Message flag changes
+- **MessagesReadContext** - Message read receipts
+- **NewAttachmentsContext** - New attachments in chat
+- **DialogFlagsContext** - Dialog flag changes
+- **FriendActivityContext** - Friend online/offline
+- **DonutSubscriptionContext** - Donut subscription events
+- **VKPayTransactionContext** - VK Pay transaction events
+- **VKAppPayloadContext** - VK App events
+
+All follow similar patterns with type-specific properties and methods.
+
+## Mixins
+
+Some contexts include additional functionality through mixins:
+
+### Attachmentable Mixin
+
+Contexts with attachments include these methods:
+
+#### hasAttachments(type?)
+
+Checks if the context has attachments.
+
+<ParamField path="type" type="AttachmentType | AttachmentTypeString">
+  Optional attachment type to filter
+</ParamField>
+
+```typescript
+if (context.hasAttachments()) {
+  console.log('Has attachments');
+}
+
+if (context.hasAttachments('photo')) {
+  console.log('Has photos');
+}
+```
+
+**Returns:** `boolean`
+
+#### getAttachments(type?)
+
+Returns attachments, optionally filtered by type.
+
+<ParamField path="type" type="AttachmentType | AttachmentTypeString">
+  Optional attachment type to filter
+</ParamField>
+
+```typescript
+const photos = context.getAttachments('photo');
+const videos = context.getAttachments('video');
+```
+
+**Returns:** `Attachment[]`
+
+## State Management
+
+All contexts support a `state` property for passing data between middleware:
+
+```typescript
+interface MyState {
+  user?: User;
+  language?: string;
+}
+
+vk.updates.on<MessageContext<MyState>>('message_new', async (context, next) => {
+  context.state.user = await getUser(context.senderId);
+  context.state.language = 'en';
+  await next();
+});
+
+vk.updates.on<MessageContext<MyState>>('message_new', async (context) => {
+  console.log(context.state.user); // Available here
+});
+```
+
+## Complete Example
+
+```typescript
+import { VK, MessageContext, MessageEventContext, Keyboard } from 'vk-io';
+
+const vk = new VK({ token: 'YOUR_TOKEN' });
+
+vk.updates.on('message_new', async (context: MessageContext) => {
+  if (context.text === '/start') {
+    await context.send('Welcome!', {
+      keyboard: Keyboard.builder()
+        .callbackButton({
+          label: 'Click me',
+          payload: { action: 'greet' },
+        })
+        .toString(),
+    });
+  }
+
+  if (context.hasAttachments('photo')) {
+    const photos = context.getAttachments('photo');
+    await context.send(`You sent ${photos.length} photo(s)`);
+  }
+});
+
+vk.updates.on('message_event', async (context: MessageEventContext) => {
+  if (context.eventPayload.action === 'greet') {
+    await context.answer({
+      type: 'show_snackbar',
+      text: 'Hello from callback!',
+    });
+  }
+});
+
+vk.updates.start().catch(console.error);
+```

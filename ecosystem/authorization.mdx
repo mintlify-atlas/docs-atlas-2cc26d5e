@@ -1,0 +1,519 @@
+---
+title: Authorization
+description: Authenticate users with VK using various authorization methods
+icon: key
+---
+
+The `@vk-io/authorization` package provides multiple ways to authorize users with VK, including direct authorization (login/password), implicit flow for users and groups, and account verification.
+
+## Installation
+
+<CodeGroup>
+```bash npm
+npm install @vk-io/authorization
+```
+
+```bash yarn
+yarn add @vk-io/authorization
+```
+
+```bash pnpm
+pnpm add @vk-io/authorization
+```
+</CodeGroup>
+
+<Note>
+  Node.js 12.20.0 or newer is required. This package requires `vk-io` as a peer dependency.
+</Note>
+
+## Authorization Methods
+
+The package supports four main authorization strategies:
+
+<CardGroup cols={2}>
+  <Card title="Direct Authorization" icon="arrow-right">
+    Login with username and password using official app credentials
+  </Card>
+  <Card title="Implicit Flow User" icon="user">
+    Browser-based OAuth flow for user tokens
+  </Card>
+  <Card title="Implicit Flow Groups" icon="users">
+    Browser-based OAuth flow for group tokens
+  </Card>
+  <Card title="Account Verification" icon="shield-check">
+    Verify account ownership during authorization
+  </Card>
+</CardGroup>
+
+## Direct Authorization
+
+Direct authorization allows you to obtain access tokens using login and password. This method only works with official VK application credentials.
+
+### Basic Usage
+
+```typescript
+import { VK, CallbackService } from 'vk-io';
+import { DirectAuthorization, officialAppCredentials } from '@vk-io/authorization';
+
+const callbackService = new CallbackService();
+
+const direct = new DirectAuthorization({
+  callbackService,
+  scope: 'all',
+  
+  // Use official app credentials
+  ...officialAppCredentials.android,
+  
+  login: process.env.LOGIN,
+  password: process.env.PASSWORD,
+  apiVersion: '5.199'
+});
+
+const response = await direct.run();
+
+console.log('Token:', response.token);
+console.log('User ID:', response.user);
+console.log('Expires:', response.expires);
+console.log('Email:', response.email);
+```
+
+### Configuration
+
+<ParamField path="callbackService" type="CallbackService" required>
+  VK-IO callback service for handling captcha and 2FA
+</ParamField>
+
+<ParamField path="clientId" type="string" required>
+  Application client ID (use `officialAppCredentials`)
+</ParamField>
+
+<ParamField path="clientSecret" type="string" required>
+  Application client secret (use `officialAppCredentials`)
+</ParamField>
+
+<ParamField path="login" type="string">
+  User login (email or phone)
+</ParamField>
+
+<ParamField path="phone" type="string | number">
+  User phone number
+</ParamField>
+
+<ParamField path="password" type="string">
+  User password
+</ParamField>
+
+<ParamField path="scope" type="string | number | string[]" required>
+  Permissions to request. Use `'all'` for all permissions or an array of specific scopes
+</ParamField>
+
+<ParamField path="apiVersion" type="string" required>
+  VK API version (e.g., '5.199')
+</ParamField>
+
+<ParamField path="timeout" type="number" default="10000">
+  Request timeout in milliseconds
+</ParamField>
+
+<ParamField path="headers" type="Record<string, string>">
+  Custom HTTP headers
+</ParamField>
+
+### Official App Credentials
+
+The package includes credentials for official VK applications:
+
+```typescript
+import { officialAppCredentials } from '@vk-io/authorization';
+
+// Available platforms:
+const platforms = {
+  android: officialAppCredentials.android,
+  windows: officialAppCredentials.windows,
+  windowsPhone: officialAppCredentials.windowsPhone,
+  iphone: officialAppCredentials.iphone,
+  ipad: officialAppCredentials.ipad,
+  vkMe: officialAppCredentials.vkMe,
+};
+```
+
+### Response Type
+
+```typescript
+interface DirectAuthResponse {
+  email?: string;      // User email (if granted)
+  user: number;        // User ID
+  token: string;       // Access token
+  expires: number;     // Token expiration time (0 for never)
+}
+```
+
+## Implicit Flow (User)
+
+Implicit flow provides browser-based OAuth authorization for user accounts.
+
+### Usage
+
+```typescript
+import { CallbackService } from 'vk-io';
+import { ImplicitFlowUser } from '@vk-io/authorization';
+
+const callbackService = new CallbackService();
+
+const implicitFlow = new ImplicitFlowUser({
+  callbackService,
+  clientId: 'YOUR_APP_ID',
+  scope: 'friends,photos,wall',
+  login: process.env.LOGIN,
+  password: process.env.PASSWORD,
+  apiVersion: '5.199'
+});
+
+const response = await implicitFlow.run();
+
+console.log('Token:', response.token);
+console.log('User ID:', response.userId);
+console.log('Expires:', response.expires);
+```
+
+### Response Type
+
+```typescript
+interface ImplicitFlowUserResponse {
+  email?: string;         // User email (if granted)
+  userId?: number;        // User ID
+  token: string;          // Access token
+  expires?: number;       // Token expiration time
+}
+```
+
+## Implicit Flow (Groups)
+
+Get access tokens for managing community (group) accounts.
+
+### Usage
+
+```typescript
+import { CallbackService } from 'vk-io';
+import { ImplicitFlowGroups } from '@vk-io/authorization';
+
+const callbackService = new CallbackService();
+
+const implicitFlow = new ImplicitFlowGroups({
+  callbackService,
+  clientId: 'YOUR_APP_ID',
+  groupIds: [123456789, 987654321],
+  scope: 'messages,photos,manage',
+  login: process.env.LOGIN,
+  password: process.env.PASSWORD,
+  apiVersion: '5.199'
+});
+
+const response = await implicitFlow.run();
+
+for (const group of response.groups) {
+  console.log('Group ID:', group.groupId);
+  console.log('Token:', group.token);
+  console.log('Expires:', group.expires);
+}
+```
+
+### Configuration
+
+<ParamField path="groupIds" type="number[]" required>
+  Array of group IDs to authorize
+</ParamField>
+
+### Response Type
+
+```typescript
+interface ImplicitFlowGroupsResponse {
+  groups: Array<{
+    groupId: number;      // Group ID
+    token: string;        // Group access token
+    expires: number;      // Token expiration time
+  }>;
+}
+```
+
+## Account Verification
+
+Verify account ownership during the authorization process.
+
+### Usage
+
+```typescript
+import { CallbackService } from 'vk-io';
+import { AccountVerification } from '@vk-io/authorization';
+
+const callbackService = new CallbackService();
+
+const verification = new AccountVerification({
+  callbackService,
+  login: process.env.LOGIN,
+  phone: process.env.PHONE,
+  agent: customHttpsAgent // optional
+});
+
+const redirectUri = 'https://oauth.vk.ru/authorize?...';
+const response = await verification.run(redirectUri);
+
+console.log('User ID:', response.userId);
+console.log('Token:', response.token);
+```
+
+### Response Type
+
+```typescript
+interface AccountVerificationResponse {
+  userId: number;        // User ID
+  token: string;         // Access token
+}
+```
+
+## Permission Scopes
+
+The package provides predefined permission scopes:
+
+### User Scopes
+
+```typescript
+import { userScopes } from '@vk-io/authorization';
+
+// Available scopes:
+// notify, friends, photos, audio, video, pages, link, status,
+// notes, messages, wall, ads, offline, docs, groups,
+// notifications, stats, email, market
+```
+
+### Group Scopes
+
+```typescript
+import { groupScopes } from '@vk-io/authorization';
+
+// Available scopes:
+// stories, photos, messages, docs, manage
+```
+
+### Using Scopes
+
+<CodeGroup>
+```typescript All Permissions
+const auth = new DirectAuthorization({
+  scope: 'all', // Request all available permissions
+  // ...
+});
+```
+
+```typescript Specific Permissions
+const auth = new DirectAuthorization({
+  scope: 'friends,photos,wall', // Specific permissions
+  // ...
+});
+```
+
+```typescript Array Format
+const auth = new DirectAuthorization({
+  scope: ['friends', 'photos', 'wall'], // Array format
+  // ...
+});
+```
+
+```typescript Numeric Bitmask
+const auth = new DirectAuthorization({
+  scope: 4096 + 8192, // messages + wall
+  // ...
+});
+```
+</CodeGroup>
+
+## Error Handling
+
+The package provides detailed error codes for different failure scenarios:
+
+```typescript
+import { AuthErrorCode } from '@vk-io/authorization';
+
+try {
+  const response = await direct.run();
+} catch (error) {
+  if (error.code === AuthErrorCode.USERNAME_OR_PASSWORD_IS_INCORRECT) {
+    console.error('Invalid credentials');
+  } else if (error.code === AuthErrorCode.FAILED_PASSED_CAPTCHA) {
+    console.error('Captcha verification failed');
+  } else if (error.code === AuthErrorCode.FAILED_PASSED_TWO_FACTOR) {
+    console.error('Two-factor authentication failed');
+  } else if (error.code === AuthErrorCode.TOO_MUCH_TRIES) {
+    console.error('Too many attempts, try again later');
+  }
+}
+```
+
+### Error Codes
+
+<ParamField path="PAGE_BLOCKED" type="string">
+  User page is blocked
+</ParamField>
+
+<ParamField path="INVALID_PHONE_NUMBER" type="string">
+  Invalid or missing phone number
+</ParamField>
+
+<ParamField path="AUTHORIZATION_FAILED" type="string">
+  General authorization failure
+</ParamField>
+
+<ParamField path="FAILED_PASSED_CAPTCHA" type="string">
+  Failed to pass captcha verification
+</ParamField>
+
+<ParamField path="FAILED_PASSED_TWO_FACTOR" type="string">
+  Failed two-factor authentication
+</ParamField>
+
+<ParamField path="USERNAME_OR_PASSWORD_IS_INCORRECT" type="string">
+  Invalid login credentials
+</ParamField>
+
+<ParamField path="TOO_MUCH_TRIES" type="string">
+  Too many authorization attempts
+</ParamField>
+
+<ParamField path="WRONG_OTP" type="string">
+  Incorrect two-factor code
+</ParamField>
+
+<ParamField path="OTP_FORMAT_IS_INCORRECT" type="string">
+  Invalid two-factor code format
+</ParamField>
+
+## Handling Captcha and 2FA
+
+Use VK-IO's `CallbackService` to handle captcha and two-factor authentication:
+
+```typescript
+import { CallbackService } from 'vk-io';
+
+const callbackService = new CallbackService();
+
+// Handle captcha
+callbackService.onCaptcha(async ({ src, type }, retry) => {
+  console.log('Captcha image:', src);
+  
+  const key = await solveCaptcha(src); // Your captcha solving logic
+  
+  return retry(key);
+});
+
+// Handle 2FA
+callbackService.onTwoFactor(async ({ phoneMask, type }, retry) => {
+  console.log('Enter code sent to:', phoneMask);
+  
+  const code = await getCodeFromUser(); // Your code input logic
+  
+  return retry(code);
+});
+```
+
+## Best Practices
+
+<Steps>
+  <Step title="Use Environment Variables">
+    Store credentials securely in environment variables, never hardcode them
+    
+    ```typescript
+    const direct = new DirectAuthorization({
+      login: process.env.VK_LOGIN,
+      password: process.env.VK_PASSWORD,
+      // ...
+    });
+    ```
+  </Step>
+  
+  <Step title="Request Minimal Permissions">
+    Only request the permissions your application actually needs
+    
+    ```typescript
+    scope: 'friends,photos', // Only what you need
+    ```
+  </Step>
+  
+  <Step title="Handle Errors Gracefully">
+    Implement proper error handling for all authorization scenarios
+    
+    ```typescript
+    try {
+      const response = await direct.run();
+    } catch (error) {
+      // Handle specific error codes
+    }
+    ```
+  </Step>
+  
+  <Step title="Store Tokens Securely">
+    Save obtained tokens securely and reuse them instead of re-authenticating
+    
+    ```typescript
+    const { token, expires } = await direct.run();
+    await secureStorage.save({ token, expires });
+    ```
+  </Step>
+</Steps>
+
+## Complete Example
+
+```typescript
+import { VK, CallbackService } from 'vk-io';
+import { DirectAuthorization, officialAppCredentials, AuthErrorCode } from '@vk-io/authorization';
+
+const callbackService = new CallbackService();
+
+// Handle 2FA
+callbackService.onTwoFactor(async ({ phoneMask }, retry) => {
+  console.log(`Enter code sent to ${phoneMask}:`);
+  const code = await getUserInput();
+  return retry(code);
+});
+
+// Handle captcha
+callbackService.onCaptcha(async ({ src }, retry) => {
+  console.log(`Solve captcha: ${src}`);
+  const key = await solveCaptcha(src);
+  return retry(key);
+});
+
+const direct = new DirectAuthorization({
+  callbackService,
+  scope: 'messages,friends,wall',
+  ...officialAppCredentials.android,
+  login: process.env.VK_LOGIN,
+  password: process.env.VK_PASSWORD,
+  apiVersion: '5.199'
+});
+
+async function authorize() {
+  try {
+    const response = await direct.run();
+    
+    console.log('Authorization successful!');
+    console.log('Token:', response.token);
+    console.log('User ID:', response.user);
+    
+    // Use the token with VK-IO
+    const vk = new VK({ token: response.token });
+    const [user] = await vk.api.users.get({});
+    console.log(`Logged in as: ${user.first_name} ${user.last_name}`);
+    
+  } catch (error) {
+    if (error.code === AuthErrorCode.USERNAME_OR_PASSWORD_IS_INCORRECT) {
+      console.error('Invalid credentials');
+    } else if (error.code === AuthErrorCode.TOO_MUCH_TRIES) {
+      console.error('Too many attempts. Try again in a few hours.');
+    } else {
+      console.error('Authorization failed:', error.message);
+    }
+  }
+}
+
+authorize();
+```

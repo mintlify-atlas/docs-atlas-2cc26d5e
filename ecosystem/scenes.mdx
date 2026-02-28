@@ -1,0 +1,622 @@
+---
+title: Scenes
+description: Build conversational flows with middleware-based scene management
+icon: film
+---
+
+The `@vk-io/scenes` package provides a powerful scene system for managing complex conversational flows in your VK bot. Scenes allow you to organize bot logic into reusable, stateful components that guide users through multi-step interactions.
+
+## Installation
+
+<CodeGroup>
+```bash npm
+npm install @vk-io/scenes @vk-io/session
+```
+
+```bash yarn
+yarn add @vk-io/scenes @vk-io/session
+```
+
+```bash pnpm
+pnpm add @vk-io/scenes @vk-io/session
+```
+</CodeGroup>
+
+<Note>
+  Scenes require `@vk-io/session` to store scene state. Install both packages.
+</Note>
+
+## Quick Start
+
+Create a simple multi-step signup scene:
+
+```typescript
+import { VK } from 'vk-io';
+import { SessionManager } from '@vk-io/session';
+import { SceneManager, StepScene } from '@vk-io/scenes';
+
+const vk = new VK({ token: process.env.TOKEN });
+
+const sessionManager = new SessionManager();
+const sceneManager = new SceneManager();
+
+vk.updates.on('message_new', sessionManager.middleware);
+vk.updates.on('message_new', sceneManager.middleware);
+vk.updates.on('message_new', sceneManager.middlewareIntercept);
+
+// Define a signup scene
+sceneManager.addScenes([
+  new StepScene('signup', [
+    (context) => {
+      if (context.scene.step.firstTime || !context.text) {
+        return context.send('What\'s your name?');
+      }
+      
+      context.scene.state.firstName = context.text;
+      return context.scene.step.next();
+    },
+    (context) => {
+      if (context.scene.step.firstTime || !context.text) {
+        return context.send('How old are you?');
+      }
+      
+      context.scene.state.age = Number(context.text);
+      return context.scene.step.next();
+    },
+    async (context) => {
+      const { firstName, age } = context.scene.state;
+      
+      await context.send(`👤 ${firstName}, ${age} years old`);
+      
+      // Automatically exits since this is the last step
+      return context.scene.step.next();
+    }
+  ])
+]);
+
+// Entry point
+vk.updates.on('message_new', (context, next) => {
+  if (context.text === '/signup') {
+    return context.scene.enter('signup');
+  }
+  
+  return next();
+});
+
+vk.updates.start();
+```
+
+## Scene Types
+
+### StepScene
+
+A scene that executes handlers in sequence, perfect for multi-step forms and wizards.
+
+```typescript
+import { StepScene } from '@vk-io/scenes';
+
+const orderScene = new StepScene('order', [
+  // Step 1: Get product
+  async (context) => {
+    if (context.scene.step.firstTime) {
+      return context.send('What would you like to order?');
+    }
+    
+    context.scene.state.product = context.text;
+    return context.scene.step.next();
+  },
+  
+  // Step 2: Get quantity
+  async (context) => {
+    if (context.scene.step.firstTime) {
+      return context.send('How many?');
+    }
+    
+    context.scene.state.quantity = Number(context.text);
+    return context.scene.step.next();
+  },
+  
+  // Step 3: Confirm
+  async (context) => {
+    const { product, quantity } = context.scene.state;
+    
+    await context.send(
+      `Order confirmed: ${quantity}x ${product}\n` +
+      `Total: $${quantity * 10}`
+    );
+    
+    return context.scene.step.next(); // Exits scene
+  }
+]);
+```
+
+## Scene Manager
+
+The scene manager orchestrates scene lifecycle and routing.
+
+### Configuration
+
+```typescript
+import { SceneManager } from '@vk-io/scenes';
+
+const sceneManager = new SceneManager({
+  scenes: [scene1, scene2], // Optional: add scenes during initialization
+  sessionKey: 'session' // Default: 'session'
+});
+```
+
+<ParamField path="scenes" type="IScene[]">
+  Array of scenes to register initially
+</ParamField>
+
+<ParamField path="sessionKey" type="string" default="'session'">
+  Key where session data is stored in context
+</ParamField>
+
+### Methods
+
+<ParamField path="addScenes(scenes)" type="(scenes: IScene[]) => this">
+  Register multiple scenes
+  
+  ```typescript
+  sceneManager.addScenes([signupScene, orderScene]);
+  ```
+</ParamField>
+
+<ParamField path="hasScene(slug)" type="(slug: string) => boolean">
+  Check if a scene is registered
+  
+  ```typescript
+  if (sceneManager.hasScene('signup')) {
+    // Scene exists
+  }
+  ```
+</ParamField>
+
+### Middleware
+
+The scene manager provides two middleware functions:
+
+```typescript
+// Attaches scene context to messages
+vk.updates.on('message_new', sceneManager.middleware);
+
+// Intercepts messages when user is in a scene
+vk.updates.on('message_new', sceneManager.middlewareIntercept);
+```
+
+## Scene Context
+
+When inside a scene, the context is extended with scene control methods:
+
+### Entering Scenes
+
+```typescript
+// Enter a scene by slug
+await context.scene.enter('signup');
+
+// Enter with initial state
+await context.scene.enter('order', {
+  product: 'Pizza',
+  discount: 0.1
+});
+```
+
+### Exiting Scenes
+
+```typescript
+// Leave current scene
+await context.scene.leave();
+
+// Leave and enter another scene
+await context.scene.leave();
+await context.scene.enter('menu');
+```
+
+### Re-entering
+
+```typescript
+// Restart current scene from the beginning
+await context.scene.reenter();
+```
+
+### Scene State
+
+Store data that persists across steps:
+
+```typescript
+vk.updates.on('message_new', async (context) => {
+  // Write to state
+  context.scene.state.userName = context.text;
+  context.scene.state.items = [];
+  
+  // Read from state
+  const userName = context.scene.state.userName;
+});
+```
+
+### Current Scene
+
+```typescript
+if (context.scene.current) {
+  console.log('Currently in scene:', context.scene.current);
+} else {
+  console.log('Not in any scene');
+}
+```
+
+## Step Scene Context
+
+When using `StepScene`, additional step control is available:
+
+### Step Navigation
+
+```typescript
+const scene = new StepScene('wizard', [
+  async (context) => {
+    // Move to next step
+    await context.scene.step.next();
+  },
+  async (context) => {
+    // Go back to previous step
+    await context.scene.step.previous();
+  },
+  async (context) => {
+    // Jump to specific step (0-indexed)
+    await context.scene.step.go(0);
+  }
+]);
+```
+
+### Step Information
+
+```typescript
+const scene = new StepScene('survey', [
+  async (context) => {
+    console.log('Current step index:', context.scene.step.index); // 0
+    console.log('Is first time?', context.scene.step.firstTime); // true on first entry
+    
+    // Check if this is the first time entering this step
+    if (context.scene.step.firstTime) {
+      await context.send('Question 1: ...');
+      return;
+    }
+    
+    // User has responded, process answer
+    context.scene.state.answer1 = context.text;
+    await context.scene.step.next();
+  }
+]);
+```
+
+## Advanced Patterns
+
+### Scene with Enter/Leave Handlers
+
+```typescript
+import { StepScene } from '@vk-io/scenes';
+
+const gameScene = new StepScene('game', {
+  steps: [
+    async (context) => {
+      // Game logic
+    }
+  ],
+  
+  enterHandler: async (context) => {
+    console.log('User entered game scene');
+    await context.send('🎮 Starting game...');
+  },
+  
+  leaveHandler: async (context) => {
+    console.log('User left game scene');
+    await context.send('Thanks for playing!');
+    
+    // Clean up game state
+    delete context.scene.state.gameData;
+  }
+});
+```
+
+### Conditional Navigation
+
+```typescript
+const quizScene = new StepScene('quiz', [
+  async (context) => {
+    await context.send('Question 1: 2 + 2 = ?');
+    context.scene.state.question1 = context.text;
+    
+    await context.scene.step.next();
+  },
+  async (context) => {
+    const answer = context.text;
+    
+    if (answer === '4') {
+      context.scene.state.score = 1;
+      await context.scene.step.next(); // Continue to next question
+    } else {
+      await context.send('Wrong! Try again.');
+      await context.scene.step.go(0); // Go back to question 1
+    }
+  },
+  async (context) => {
+    await context.send(`Quiz complete! Score: ${context.scene.state.score}`);
+    await context.scene.leave();
+  }
+]);
+```
+
+### Nested Scenes
+
+```typescript
+const addressScene = new StepScene('address', [
+  async (context) => {
+    if (context.scene.step.firstTime) {
+      return context.send('Enter your street address:');
+    }
+    context.scene.state.street = context.text;
+    await context.scene.step.next();
+  },
+  async (context) => {
+    if (context.scene.step.firstTime) {
+      return context.send('Enter your city:');
+    }
+    context.scene.state.city = context.text;
+    await context.scene.leave(); // Return to parent scene
+  }
+]);
+
+const checkoutScene = new StepScene('checkout', [
+  async (context) => {
+    await context.send('Enter your name:');
+    context.scene.state.name = context.text;
+    await context.scene.step.next();
+  },
+  async (context) => {
+    // Enter nested scene
+    await context.scene.enter('address');
+  },
+  async (context) => {
+    // This step runs after address scene completes
+    const { street, city } = context.scene.state;
+    await context.send(`Delivery to: ${street}, ${city}`);
+    await context.scene.leave();
+  }
+]);
+
+sceneManager.addScenes([addressScene, checkoutScene]);
+```
+
+### Scene with Validation
+
+```typescript
+const registrationScene = new StepScene('register', [
+  async (context) => {
+    if (context.scene.step.firstTime) {
+      return context.send('Enter your email:');
+    }
+    
+    const email = context.text;
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    
+    if (!emailRegex.test(email)) {
+      await context.send('Invalid email format. Please try again:');
+      return; // Stay on same step
+    }
+    
+    context.scene.state.email = email;
+    await context.scene.step.next();
+  },
+  async (context) => {
+    if (context.scene.step.firstTime) {
+      return context.send('Choose a password (min 8 characters):');
+    }
+    
+    const password = context.text;
+    
+    if (password.length < 8) {
+      await context.send('Password too short. Try again:');
+      return;
+    }
+    
+    context.scene.state.password = password;
+    await context.send('✅ Registration complete!');
+    await context.scene.leave();
+  }
+]);
+```
+
+### Cancel Handler
+
+Allow users to exit scenes:
+
+```typescript
+vk.updates.on('message_new', sceneManager.middleware);
+vk.updates.on('message_new', async (context, next) => {
+  // Global cancel command
+  if (context.text === '/cancel' && context.scene.current) {
+    await context.scene.leave();
+    return context.send('Cancelled.');
+  }
+  
+  return next();
+});
+vk.updates.on('message_new', sceneManager.middlewareIntercept);
+```
+
+## TypeScript Support
+
+Define scene state types:
+
+```typescript
+interface SignupState {
+  firstName: string;
+  lastName: string;
+  age: number;
+  email: string;
+}
+
+const signupScene = new StepScene<MessageContext, SignupState>('signup', [
+  async (context) => {
+    // TypeScript knows the state structure
+    context.scene.state.firstName = context.text!;
+    await context.scene.step.next();
+  }
+]);
+```
+
+## Complete Example
+
+A comprehensive bot with multiple scenes:
+
+```typescript
+import { VK } from 'vk-io';
+import { SessionManager } from '@vk-io/session';
+import { SceneManager, StepScene } from '@vk-io/scenes';
+
+const vk = new VK({ token: process.env.TOKEN });
+const sessionManager = new SessionManager();
+const sceneManager = new SceneManager();
+
+// Pizza order scene
+const pizzaScene = new StepScene('pizza', [
+  async (context) => {
+    if (context.scene.step.firstTime) {
+      return context.send(
+        'Choose pizza size:\n' +
+        '1. Small\n' +
+        '2. Medium\n' +
+        '3. Large'
+      );
+    }
+    
+    const sizes = ['small', 'medium', 'large'];
+    const choice = Number(context.text) - 1;
+    
+    if (choice < 0 || choice > 2) {
+      return context.send('Invalid choice. Enter 1, 2, or 3:');
+    }
+    
+    context.scene.state.size = sizes[choice];
+    await context.scene.step.next();
+  },
+  async (context) => {
+    if (context.scene.step.firstTime) {
+      return context.send('Enter delivery address:');
+    }
+    
+    context.scene.state.address = context.text;
+    await context.scene.step.next();
+  },
+  async (context) => {
+    const { size, address } = context.scene.state;
+    const prices = { small: 10, medium: 15, large: 20 };
+    
+    await context.send(
+      `🍕 Order confirmed!\n` +
+      `Size: ${size}\n` +
+      `Price: $${prices[size]}\n` +
+      `Delivery to: ${address}`
+    );
+    
+    await context.scene.leave();
+  }
+]);
+
+// Feedback scene
+const feedbackScene = new StepScene('feedback', [
+  async (context) => {
+    if (context.scene.step.firstTime) {
+      return context.send('Rate our service (1-5):');
+    }
+    
+    const rating = Number(context.text);
+    
+    if (rating < 1 || rating > 5) {
+      return context.send('Please enter a number between 1 and 5:');
+    }
+    
+    context.scene.state.rating = rating;
+    await context.scene.step.next();
+  },
+  async (context) => {
+    if (context.scene.step.firstTime) {
+      return context.send('Any comments?');
+    }
+    
+    context.scene.state.comment = context.text;
+    
+    await context.send(
+      `Thanks for your feedback!\n` +
+      `Rating: ${context.scene.state.rating}/5`
+    );
+    
+    await context.scene.leave();
+  }
+]);
+
+sceneManager.addScenes([pizzaScene, feedbackScene]);
+
+// Middleware chain
+vk.updates.on('message_new', sessionManager.middleware);
+vk.updates.on('message_new', sceneManager.middleware);
+
+// Cancel command
+vk.updates.on('message_new', async (context, next) => {
+  if (context.text === '/cancel' && context.scene.current) {
+    await context.scene.leave();
+    return context.send('❌ Cancelled');
+  }
+  return next();
+});
+
+vk.updates.on('message_new', sceneManager.middlewareIntercept);
+
+// Command handlers
+vk.updates.on('message_new', async (context) => {
+  if (context.text === '/start') {
+    return context.send(
+      'Welcome! Commands:\n' +
+      '/pizza - Order pizza\n' +
+      '/feedback - Leave feedback\n' +
+      '/cancel - Cancel current action'
+    );
+  }
+  
+  if (context.text === '/pizza') {
+    return context.scene.enter('pizza');
+  }
+  
+  if (context.text === '/feedback') {
+    return context.scene.enter('feedback');
+  }
+  
+  return context.send('Unknown command. Type /start for help.');
+});
+
+vk.updates.start().catch(console.error);
+```
+
+## Best Practices
+
+<CardGroup cols={2}>
+  <Card title="Always Check firstTime" icon="check">
+    Use `context.scene.step.firstTime` to differentiate between showing a prompt and processing input
+  </Card>
+  
+  <Card title="Validate Input" icon="shield">
+    Validate user input before moving to the next step
+  </Card>
+  
+  <Card title="Provide Cancel Option" icon="xmark">
+    Always give users a way to exit scenes (e.g., `/cancel` command)
+  </Card>
+  
+  <Card title="Clear State" icon="broom">
+    Clean up scene state in leave handlers to avoid memory leaks
+  </Card>
+</CardGroup>
+
+<Note>
+  Scenes work best for structured conversations. For simple state management without steps, use [@vk-io/session](/ecosystem/session) instead.
+</Note>

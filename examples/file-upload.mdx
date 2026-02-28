@@ -1,0 +1,433 @@
+---
+title: File Upload
+description: Upload photos, videos, documents, and audio files to VK using various sources
+---
+
+This example demonstrates the comprehensive file upload capabilities of VK-IO. You'll learn how to upload files from various sources including file paths, streams, buffers, and URLs.
+
+## What You'll Learn
+
+- Uploading files from different sources
+- Working with the Upload API
+- Uploading photos for walls, albums, and messages
+- Uploading multiple files at once
+- Custom upload URLs and timeouts
+- Automatic content type detection
+
+## Prerequisites
+
+<Steps>
+  <Step title="Install dependencies">
+    ```bash
+    npm install vk-io
+    # Optional: for URL uploads
+    npm install node-fetch
+    ```
+  </Step>
+
+  <Step title="Set up your access token">
+    ```bash
+    export TOKEN=your_vk_access_token
+    ```
+  </Step>
+</Steps>
+
+## Upload Sources
+
+VK-IO supports uploading files from multiple sources:
+
+### File Path
+
+```javascript
+const { VK } = require('vk-io');
+
+const vk = new VK({
+    token: process.env.TOKEN,
+});
+
+vk.upload.wallPhoto({
+    source: {
+        value: './path/to/cat1.jpg',
+    },
+});
+```
+
+<Tip>
+When uploading from a file path, VK-IO automatically detects the content type and filename from the file extension.
+</Tip>
+
+### File Stream
+
+```javascript
+const fs = require('fs');
+
+vk.upload.wallPhoto({
+    source: {
+        value: fs.createReadStream('./path/to/cat2.jpg'),
+    },
+});
+```
+
+### Buffer
+
+```javascript
+const fs = require('fs');
+
+vk.upload.wallPhoto({
+    source: {
+        value: fs.readFileSync('./path/to/cat3.jpg'),
+    },
+});
+```
+
+### URL (Direct)
+
+```javascript
+vk.upload.wallPhoto({
+    source: {
+        value: 'http://lorempixel.com/400/200/cats/',
+    },
+});
+```
+
+<Note>
+When uploading from a URL, VK-IO downloads the file and uploads it to VK's servers.
+</Note>
+
+### URL to Buffer
+
+```javascript
+const fetch = require('node-fetch');
+
+fetch('http://lorempixel.com/400/200/cats/')
+    .then(response => response.buffer())
+    .then(buffer =>
+        vk.upload.wallPhoto({
+            source: {
+                value: buffer,
+            },
+        }),
+    );
+```
+
+### URL to Stream
+
+```javascript
+const fetch = require('node-fetch');
+
+fetch('http://lorempixel.com/400/200/cats/').then(response =>
+    vk.upload.wallPhoto({
+        source: {
+            value: response.body,
+            contentLength: response.headers.get('content-length'),
+        },
+    }),
+);
+```
+
+## Complete Upload Example
+
+```javascript
+const { VK } = require('vk-io');
+const fetch = require('node-fetch');
+const fs = require('fs');
+
+const vk = new VK({
+    token: process.env.TOKEN,
+});
+
+// Upload photos from various sources
+Promise.all([
+    /* File path */
+    vk.upload.wallPhoto({
+        source: {
+            value: './path/to/cat1.jpg',
+        },
+    }),
+
+    /* File stream */
+    vk.upload.wallPhoto({
+        source: {
+            value: fs.createReadStream('./path/to/cat2.jpg'),
+        },
+    }),
+
+    /* Buffer */
+    vk.upload.wallPhoto({
+        source: {
+            value: fs.readFileSync('./path/to/cat3.jpg'),
+        },
+    }),
+
+    /* URL */
+    vk.upload.wallPhoto({
+        source: {
+            value: 'http://lorempixel.com/400/200/cats/',
+        },
+    }),
+
+    /* URL Buffer */
+    fetch('http://lorempixel.com/400/200/cats/')
+        .then(response => response.buffer())
+        .then(buffer =>
+            vk.upload.wallPhoto({
+                source: {
+                    value: buffer,
+                },
+            }),
+        ),
+
+    /* URL Stream */
+    fetch('http://lorempixel.com/400/200/cats/').then(response =>
+        vk.upload.wallPhoto({
+            source: {
+                value: response.body,
+                contentLength: response.headers.get('content-length'),
+            },
+        }),
+    ),
+]).then(photos => {
+    console.log('All photos uploaded successfully:', photos);
+});
+```
+
+## Custom Content Type and Filename
+
+For files without extensions or with custom formats, you can specify the content type and filename:
+
+```javascript
+// JPEG stored as .dat file
+vk.upload.wallPhoto({
+    source: {
+        value: './path/to/cat1.dat',
+        contentType: 'image/jpeg',
+        filename: 'cat1.jpg',
+    },
+});
+
+// PNG file without extension
+vk.upload.wallPhoto({
+    source: {
+        value: fs.createReadStream('./path/to/cat2'),
+        contentType: 'image/png',
+        filename: 'cat2.png',
+    },
+});
+```
+
+<Tip>
+Specifying `contentType` and `filename` is useful when working with files that don't have standard extensions or when the MIME type cannot be automatically detected.
+</Tip>
+
+## Uploading Multiple Files
+
+Some upload methods support multiple files (like `photoAlbum`):
+
+```javascript
+vk.upload.photoAlbum({
+    source: {
+        timeout: 1e3 * 60, // 60 seconds timeout
+        values: [
+            {
+                value: './path/to/cat1.jpg',
+            },
+            {
+                value: 'http://lorempixel.com/400/200/cats/',
+            },
+            {
+                value: fs.createReadStream('./path/to/cat2.jpg'),
+            },
+            {
+                value: fs.createReadStream('./path/to/cat3.jpg'),
+                filename: 'cat3.jpg',
+            },
+            {
+                value: './path/to/cat5.dat',
+                contentType: 'image/jpeg',
+                filename: 'cat5.jpg',
+            },
+        ],
+    },
+});
+```
+
+<Note>
+Note the use of `values` (plural) instead of `value` when uploading multiple files. Each item in the array follows the same format as single file uploads.
+</Note>
+
+## Custom Upload URL and Timeout
+
+You can customize the upload URL or set custom timeouts:
+
+```javascript
+vk.upload.photoAlbum({
+    source: {
+        uploadUrl: '<custom upload url>', // Optional: custom upload endpoint
+        timeout: 60e3, // 60 seconds
+        values: [
+            {
+                value: '<value>',
+            },
+        ],
+    },
+});
+```
+
+## Upload Methods
+
+VK-IO provides various upload methods for different content types:
+
+### Photos
+
+<CodeGroup>
+```javascript Wall Photo
+vk.upload.wallPhoto({
+    source: { value: './photo.jpg' },
+});
+```
+
+```javascript Message Photo
+vk.upload.messagePhoto({
+    source: { value: './photo.jpg' },
+});
+```
+
+```javascript Album Photo
+vk.upload.photoAlbum({
+    album_id: 123456,
+    source: {
+        values: [
+            { value: './photo1.jpg' },
+            { value: './photo2.jpg' },
+        ],
+    },
+});
+```
+
+```javascript Profile Photo
+vk.upload.ownerPhoto({
+    source: { value: './avatar.jpg' },
+});
+```
+</CodeGroup>
+
+### Videos
+
+```javascript
+vk.upload.video({
+    title: 'My Video',
+    description: 'Video description',
+    source: {
+        value: './video.mp4',
+    },
+});
+```
+
+### Documents
+
+```javascript
+vk.upload.messageDocument({
+    source: {
+        value: './document.pdf',
+        filename: 'document.pdf',
+    },
+    title: 'Important Document',
+});
+```
+
+### Audio
+
+```javascript
+vk.upload.audio({
+    source: {
+        value: './song.mp3',
+    },
+    artist: 'Artist Name',
+    title: 'Song Title',
+});
+```
+
+### Stories
+
+```javascript
+vk.upload.storiesPhoto({
+    source: {
+        value: './story.jpg',
+    },
+});
+
+vk.upload.storiesVideo({
+    source: {
+        value: './story.mp4',
+    },
+});
+```
+
+## Using Uploads in Messages
+
+After uploading, you can attach files to messages:
+
+```javascript
+const [photo] = await vk.upload.messagePhoto({
+    source: {
+        value: 'https://loremflickr.com/400/300/',
+    },
+});
+
+await vk.api.messages.send({
+    peer_id: 123456789,
+    message: 'Check out this photo!',
+    attachment: photo.toString(),
+    random_id: Math.random(),
+});
+```
+
+Or use the convenient context methods:
+
+```javascript
+vk.updates.on('message_new', async context => {
+    if (context.text === '/photo') {
+        await context.sendPhotos({
+            value: 'https://loremflickr.com/400/300/',
+        });
+    }
+});
+```
+
+## Error Handling
+
+Always handle upload errors properly:
+
+```javascript
+try {
+    const photo = await vk.upload.wallPhoto({
+        source: {
+            value: './photo.jpg',
+        },
+    });
+    
+    console.log('Photo uploaded:', photo);
+} catch (error) {
+    if (error.code === 'ENOENT') {
+        console.error('File not found');
+    } else {
+        console.error('Upload failed:', error.message);
+    }
+}
+```
+
+## Best Practices
+
+<Tip>
+- Use streams for large files to avoid loading them entirely into memory
+- Set appropriate timeouts for large file uploads
+- Always specify content type for files without standard extensions
+- Handle errors gracefully with try-catch blocks
+- Use Promise.all() to upload multiple files concurrently
+</Tip>
+
+## Next Steps
+
+- Explore the [Upload API documentation](/api-reference/upload) for all available methods
+- Learn about [Context methods](/api-reference/contexts) for convenient upload shortcuts
+- Check out the [Attachments guide](/advanced/attachments) for working with uploaded files

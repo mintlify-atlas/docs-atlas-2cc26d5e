@@ -1,0 +1,628 @@
+---
+title: Stateless Prompt
+description: Create stateless prompts using message replies without sessions
+icon: reply
+---
+
+The `@vk-io/stateless-prompt` package provides a lightweight way to create prompts and collect user responses using VK's message reply feature. Unlike traditional session-based approaches, this method is completely stateless and works by having users reply to specific bot messages.
+
+## Installation
+
+<CodeGroup>
+```bash npm
+npm install @vk-io/stateless-prompt
+```
+
+```bash yarn
+yarn add @vk-io/stateless-prompt
+```
+
+```bash pnpm
+pnpm add @vk-io/stateless-prompt
+```
+</CodeGroup>
+
+<Note>
+  Node.js 12.20.0 or newer is required.
+</Note>
+
+## How It Works
+
+Stateless prompts work by:
+
+1. Adding a unique identifier to the end of your prompt message
+2. User replies to that message
+3. The bot checks if the reply contains the unique identifier
+4. If it does, your handler is called with the user's response
+
+This approach eliminates the need for session storage while maintaining conversational context.
+
+![Stateless Prompt Example](https://user-images.githubusercontent.com/9392723/134985949-e5cf1758-0469-428e-85ed-12229e36e58b.png)
+
+## Quick Start
+
+```typescript
+import { VK } from 'vk-io';
+import { StatelessPromptManager } from '@vk-io/stateless-prompt';
+
+const vk = new VK({ token: process.env.TOKEN });
+
+// Create a prompt for name
+const namePrompt = new StatelessPromptManager({
+  slug: 'name',
+  handler: async (context, next) => {
+    if (!context.text) {
+      return context.send('Please reply with text to the previous message');
+    }
+    
+    await context.send(`Your name is ${context.text}`);
+  }
+});
+
+// Intercept replies to our prompt
+vk.updates.on('message_new', namePrompt.middlewareIntercept);
+
+// Trigger the prompt
+vk.updates.on('message_new', (context) => {
+  if (context.text === '/signup') {
+    return context.send(
+      'What\'s your name? Please reply to this message. ' + namePrompt.suffix
+    );
+  }
+});
+
+vk.updates.start();
+```
+
+## Creating Prompts
+
+### Basic Prompt
+
+```typescript
+import { StatelessPromptManager } from '@vk-io/stateless-prompt';
+
+const agePrompt = new StatelessPromptManager({
+  slug: 'age', // Unique identifier for this prompt
+  handler: async (context, next) => {
+    const age = Number(context.text);
+    
+    if (isNaN(age)) {
+      return context.send('Please enter a valid number');
+    }
+    
+    await context.send(`You are ${age} years old`);
+  }
+});
+```
+
+<ParamField path="slug" type="string" required>
+  Unique identifier for this prompt type. Used to generate the suffix.
+</ParamField>
+
+<ParamField path="handler" type="(context, next) => unknown" required>
+  Function to handle the user's response when they reply to your prompt.
+</ParamField>
+
+### Using the Prompt
+
+Attach the prompt suffix to your message:
+
+```typescript
+// Register the interceptor
+vk.updates.on('message_new', agePrompt.middlewareIntercept);
+
+// Send a prompt with the suffix
+vk.updates.on('message_new', async (context) => {
+  if (context.text === '/age') {
+    await context.send(
+      'How old are you? Please reply to this message. ' + agePrompt.suffix
+    );
+  }
+});
+```
+
+<Note>
+  The `suffix` property returns the unique identifier that should be added to your prompt message.
+</Note>
+
+## Multiple Prompts
+
+Create different prompts for different purposes:
+
+```typescript
+import { StatelessPromptManager } from '@vk-io/stateless-prompt';
+
+// Name prompt
+const namePrompt = new StatelessPromptManager({
+  slug: 'name',
+  handler: async (context) => {
+    await context.send(`Nice to meet you, ${context.text}!`);
+  }
+});
+
+// Email prompt
+const emailPrompt = new StatelessPromptManager({
+  slug: 'email',
+  handler: async (context) => {
+    const email = context.text;
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    
+    if (!emailRegex.test(email)) {
+      return context.send('Invalid email format');
+    }
+    
+    await context.send(`Email set to: ${email}`);
+  }
+});
+
+// Phone prompt
+const phonePrompt = new StatelessPromptManager({
+  slug: 'phone',
+  handler: async (context) => {
+    const phone = context.text?.replace(/\D/g, '');
+    
+    if (phone?.length !== 10) {
+      return context.send('Please enter a valid 10-digit phone number');
+    }
+    
+    await context.send(`Phone number: ${phone}`);
+  }
+});
+
+// Register all interceptors
+vk.updates.on('message_new', namePrompt.middlewareIntercept);
+vk.updates.on('message_new', emailPrompt.middlewareIntercept);
+vk.updates.on('message_new', phonePrompt.middlewareIntercept);
+
+// Use prompts
+vk.updates.on('message_new', async (context) => {
+  if (context.text === '/setname') {
+    await context.send('Enter your name: ' + namePrompt.suffix);
+  }
+  
+  if (context.text === '/setemail') {
+    await context.send('Enter your email: ' + emailPrompt.suffix);
+  }
+  
+  if (context.text === '/setphone') {
+    await context.send('Enter your phone: ' + phonePrompt.suffix);
+  }
+});
+```
+
+## Use Cases
+
+### Simple Data Collection
+
+```typescript
+const feedbackPrompt = new StatelessPromptManager({
+  slug: 'feedback',
+  handler: async (context) => {
+    const feedback = context.text;
+    
+    // Save to database
+    await db.feedback.insert({
+      user_id: context.senderId,
+      text: feedback,
+      created_at: new Date()
+    });
+    
+    await context.send('Thank you for your feedback! 💙');
+  }
+});
+
+vk.updates.on('message_new', feedbackPrompt.middlewareIntercept);
+
+vk.updates.on('message_new', async (context) => {
+  if (context.text === '/feedback') {
+    await context.send(
+      'Please share your feedback by replying to this message. ' +
+      feedbackPrompt.suffix
+    );
+  }
+});
+```
+
+### Form Submission
+
+```typescript
+const reportPrompt = new StatelessPromptManager({
+  slug: 'report',
+  handler: async (context) => {
+    const report = context.text;
+    
+    if (!report || report.length < 10) {
+      return context.send('Report must be at least 10 characters long');
+    }
+    
+    await sendToModerators({
+      reporter: context.senderId,
+      content: report,
+      timestamp: Date.now()
+    });
+    
+    await context.send('Report submitted. We\'ll review it shortly.');
+  }
+});
+
+vk.updates.on('message_new', reportPrompt.middlewareIntercept);
+
+vk.updates.on('message_new', async (context) => {
+  if (context.text === '/report') {
+    await context.send(
+      '⚠️ Report an issue:\n' +
+      'Reply to this message with details. ' +
+      reportPrompt.suffix
+    );
+  }
+});
+```
+
+### Answer Verification
+
+```typescript
+const answerPrompt = new StatelessPromptManager({
+  slug: 'quiz-answer',
+  handler: async (context) => {
+    const answer = context.text?.toLowerCase();
+    const correctAnswer = 'paris';
+    
+    if (answer === correctAnswer) {
+      await context.send('✅ Correct! Paris is the capital of France.');
+    } else {
+      await context.send('❌ Wrong. The correct answer is Paris.');
+    }
+  }
+});
+
+vk.updates.on('message_new', answerPrompt.middlewareIntercept);
+
+vk.updates.on('message_new', async (context) => {
+  if (context.text === '/quiz') {
+    await context.send(
+      '❓ What is the capital of France?\n' +
+      'Reply to this message with your answer. ' +
+      answerPrompt.suffix
+    );
+  }
+});
+```
+
+### Confirmation Dialogs
+
+```typescript
+const confirmPrompt = new StatelessPromptManager({
+  slug: 'confirm-delete',
+  handler: async (context) => {
+    const response = context.text?.toLowerCase();
+    
+    if (response === 'yes' || response === 'y') {
+      await deleteUserData(context.senderId);
+      await context.send('✅ Your data has been deleted.');
+    } else {
+      await context.send('❌ Deletion cancelled.');
+    }
+  }
+});
+
+vk.updates.on('message_new', confirmPrompt.middlewareIntercept);
+
+vk.updates.on('message_new', async (context) => {
+  if (context.text === '/delete') {
+    await context.send(
+      '⚠️ Are you sure you want to delete all your data?\n' +
+      'Reply with "yes" to confirm or "no" to cancel. ' +
+      confirmPrompt.suffix
+    );
+  }
+});
+```
+
+## Advanced Patterns
+
+### With Validation
+
+```typescript
+const passwordPrompt = new StatelessPromptManager({
+  slug: 'password',
+  handler: async (context) => {
+    const password = context.text;
+    
+    // Validate password strength
+    if (!password || password.length < 8) {
+      return context.send('❌ Password must be at least 8 characters');
+    }
+    
+    if (!/[A-Z]/.test(password)) {
+      return context.send('❌ Password must contain uppercase letters');
+    }
+    
+    if (!/[0-9]/.test(password)) {
+      return context.send('❌ Password must contain numbers');
+    }
+    
+    // Save password (hashed, of course!)
+    await savePassword(context.senderId, password);
+    
+    await context.send('✅ Password set successfully!');
+  }
+});
+```
+
+### With Attachments
+
+```typescript
+const photoPrompt = new StatelessPromptManager({
+  slug: 'profile-photo',
+  handler: async (context) => {
+    if (!context.hasAttachments('photo')) {
+      return context.send('Please attach a photo in your reply');
+    }
+    
+    const photo = context.getAttachments('photo')[0];
+    
+    await saveProfilePhoto(context.senderId, photo.largeSizeUrl);
+    
+    await context.send('✅ Profile photo updated!');
+  }
+});
+
+vk.updates.on('message_new', photoPrompt.middlewareIntercept);
+
+vk.updates.on('message_new', async (context) => {
+  if (context.text === '/setphoto') {
+    await context.send(
+      'Upload your profile photo by replying to this message. ' +
+      photoPrompt.suffix
+    );
+  }
+});
+```
+
+### Combining with Session
+
+You can still use sessions alongside stateless prompts:
+
+```typescript
+import { SessionManager } from '@vk-io/session';
+
+const sessionManager = new SessionManager();
+vk.updates.on('message_new', sessionManager.middleware);
+
+const orderPrompt = new StatelessPromptManager({
+  slug: 'order-notes',
+  handler: async (context) => {
+    // Store in session
+    context.session.orderNotes = context.text;
+    
+    await context.send(
+      'Notes saved! Your order:\n' +
+      `Product: ${context.session.product}\n` +
+      `Quantity: ${context.session.quantity}\n` +
+      `Notes: ${context.session.orderNotes}`
+    );
+  }
+});
+```
+
+## Middleware Order
+
+<Warning>
+  Always register prompt interceptors **before** other message handlers to ensure replies are caught correctly.
+</Warning>
+
+```typescript
+// ✅ Correct order
+vk.updates.on('message_new', namePrompt.middlewareIntercept);
+vk.updates.on('message_new', emailPrompt.middlewareIntercept);
+vk.updates.on('message_new', otherHandlers);
+
+// ❌ Wrong order
+vk.updates.on('message_new', otherHandlers);
+vk.updates.on('message_new', namePrompt.middlewareIntercept); // Too late!
+```
+
+## Complete Example
+
+```typescript
+import { VK } from 'vk-io';
+import { StatelessPromptManager } from '@vk-io/stateless-prompt';
+
+const vk = new VK({ token: process.env.TOKEN });
+
+// Create prompts
+const prompts = {
+  name: new StatelessPromptManager({
+    slug: 'user-name',
+    handler: async (context) => {
+      const name = context.text;
+      
+      if (!name || name.length < 2) {
+        return context.send('Name must be at least 2 characters');
+      }
+      
+      await saveUserData(context.senderId, { name });
+      await context.send(`✅ Name set to: ${name}`);
+    }
+  }),
+  
+  age: new StatelessPromptManager({
+    slug: 'user-age',
+    handler: async (context) => {
+      const age = Number(context.text);
+      
+      if (isNaN(age) || age < 1 || age > 120) {
+        return context.send('Please enter a valid age (1-120)');
+      }
+      
+      await saveUserData(context.senderId, { age });
+      await context.send(`✅ Age set to: ${age}`);
+    }
+  }),
+  
+  feedback: new StatelessPromptManager({
+    slug: 'feedback',
+    handler: async (context) => {
+      const feedback = context.text;
+      
+      if (!feedback || feedback.length < 10) {
+        return context.send('Feedback must be at least 10 characters');
+      }
+      
+      await db.feedback.insert({
+        user_id: context.senderId,
+        text: feedback,
+        created_at: new Date()
+      });
+      
+      await context.send('✅ Thank you for your feedback!');
+    }
+  })
+};
+
+// Register all interceptors
+for (const prompt of Object.values(prompts)) {
+  vk.updates.on('message_new', prompt.middlewareIntercept);
+}
+
+// Command handlers
+vk.updates.on('message_new', async (context) => {
+  const { text } = context;
+  
+  if (text === '/start') {
+    return context.send(
+      '👋 Welcome!\n\n' +
+      'Commands:\n' +
+      '/setname - Set your name\n' +
+      '/setage - Set your age\n' +
+      '/feedback - Send feedback\n' +
+      '/profile - View your profile'
+    );
+  }
+  
+  if (text === '/setname') {
+    return context.send(
+      'What\'s your name?\n' +
+      'Reply to this message. ' +
+      prompts.name.suffix
+    );
+  }
+  
+  if (text === '/setage') {
+    return context.send(
+      'How old are you?\n' +
+      'Reply to this message. ' +
+      prompts.age.suffix
+    );
+  }
+  
+  if (text === '/feedback') {
+    return context.send(
+      '💬 Send us your feedback!\n' +
+      'Reply to this message. ' +
+      prompts.feedback.suffix
+    );
+  }
+  
+  if (text === '/profile') {
+    const userData = await getUserData(context.senderId);
+    return context.send(
+      '👤 Your Profile:\n' +
+      `Name: ${userData.name || 'Not set'}\n` +
+      `Age: ${userData.age || 'Not set'}`
+    );
+  }
+  
+  return context.send('Unknown command. Type /start for help.');
+});
+
+vk.updates.start().catch(console.error);
+```
+
+## Advantages
+
+<CardGroup cols={2}>
+  <Card title="No Storage Needed" icon="database-slash">
+    No need for session storage or databases to track conversation state
+  </Card>
+  
+  <Card title="Simple Implementation" icon="circle-check">
+    Very straightforward to implement and understand
+  </Card>
+  
+  <Card title="Works in Groups" icon="users">
+    Works in both private messages and group chats
+  </Card>
+  
+  <Card title="User-Friendly" icon="smile">
+    Uses VK's native reply feature that users are familiar with
+  </Card>
+</CardGroup>
+
+## Limitations
+
+<Warning>
+  - Cannot handle multi-step flows easily (use [@vk-io/scenes](/ecosystem/scenes) for that)
+  - Users must reply to the specific message (not just send text)
+  - Cannot store intermediate state between prompts
+  - The suffix is visible in the message (though it's just a random string)
+</Warning>
+
+## Best Practices
+
+<Steps>
+  <Step title="Clear Instructions">
+    Always tell users to reply to your message
+    
+    ```typescript
+    'Please **reply to this message** with your answer.'
+    ```
+  </Step>
+  
+  <Step title="Validate Input">
+    Always validate user input in your handler
+    
+    ```typescript
+    if (!context.text || context.text.length < 3) {
+      return context.send('Invalid input');
+    }
+    ```
+  </Step>
+  
+  <Step title="Use Unique Slugs">
+    Give each prompt a descriptive, unique slug
+    
+    ```typescript
+    slug: 'user-email-verification'
+    ```
+  </Step>
+  
+  <Step title="Register First">
+    Register interceptors before other handlers
+    
+    ```typescript
+    vk.updates.on('message_new', prompt.middlewareIntercept);
+    vk.updates.on('message_new', otherHandlers);
+    ```
+  </Step>
+</Steps>
+
+## When to Use
+
+Use `@vk-io/stateless-prompt` when:
+
+- You need simple one-off questions
+- You want to avoid session complexity
+- Storage/database is not available
+- You need group chat compatibility
+
+Use `@vk-io/scenes` instead when:
+
+- You need multi-step conversations
+- You need to store intermediate state
+- You need complex branching logic
+- You need enter/leave handlers
+
+<Note>
+  For most complex bots, a combination of [@vk-io/session](/ecosystem/session), [@vk-io/scenes](/ecosystem/scenes), and [@vk-io/hear](/ecosystem/hear) provides the best experience.
+</Note>

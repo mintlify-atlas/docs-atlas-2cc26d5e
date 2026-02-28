@@ -1,0 +1,212 @@
+---
+title: 'Community Modules'
+description: 'Explore community-built packages and extensions for VK-IO'
+icon: 'puzzle-piece'
+---
+
+The VK-IO ecosystem includes a variety of official and community-maintained packages that extend the library's functionality.
+
+## Official Packages
+
+These packages are maintained by the VK-IO core team:
+
+<CardGroup cols={2}>
+  <Card title="@vk-io/authorization" icon="key" href="https://github.com/negezor/vk-io/tree/master/packages/authorization">
+    User authorization by login & password, implicit flow, and more
+  </Card>
+  
+  <Card title="@vk-io/session" icon="database" href="https://github.com/negezor/vk-io/tree/master/packages/session">
+    Simple implementation of sessions for stateful bots
+  </Card>
+  
+  <Card title="@vk-io/scenes" icon="diagram-project" href="https://github.com/negezor/vk-io/tree/master/packages/scenes">
+    Middleware-based scene management for conversation flows
+  </Card>
+  
+  <Card title="@vk-io/streaming" icon="rss" href="https://github.com/negezor/vk-io/tree/master/packages/streaming">
+    Receive real-time data with VK Streaming API
+  </Card>
+  
+  <Card title="@vk-io/hear" icon="ear-listen" href="https://github.com/negezor/vk-io/tree/master/packages/hear">
+    Pattern matching for text messages (hear handlers)
+  </Card>
+  
+  <Card title="@vk-io/stateless-prompt" icon="comment-dots" href="https://github.com/negezor/vk-io/tree/master/packages/stateless-prompt">
+    Stateless prompt implementation for asking questions
+  </Card>
+</CardGroup>
+
+## Community Packages
+
+### User Interaction
+
+<Accordion title="vk-io-question">
+  **Repository:** [fakemancat/vk-io-question](https://github.com/fakemancat/vk-io-question)
+
+  Simple promise-based prompt for asking users questions and waiting for responses.
+
+  ```javascript
+  import { QuestionManager } from 'vk-io-question';
+
+  const questionManager = new QuestionManager();
+
+  const answer = await questionManager.ask({
+      userId: context.senderId,
+      question: 'What is your name?'
+  });
+  ```
+</Accordion>
+
+<Accordion title="vk-io-pages">
+  **Repository:** [MrZillaGold/vk-io-pages](https://github.com/MrZillaGold/vk-io-pages)
+
+  Dynamic pagination module for creating paginated menus and lists with keyboard navigation.
+
+  Perfect for:
+  - Displaying long lists across multiple pages
+  - Creating navigable catalogs
+  - Building interactive menus with navigation buttons
+</Accordion>
+
+### Bot Frameworks
+
+<Accordion title="henta">
+  **Repository:** [u14-team/henta](https://github.com/u14-team/henta)
+
+  A simple and lightweight VK bot engine built on top of VK-IO.
+
+  Features:
+  - Easy-to-use command system
+  - Built-in middleware support
+  - Simplified bot development workflow
+</Accordion>
+
+### Storage & State Management
+
+<Accordion title="vk-io-redis-storage">
+  **Repository:** [xtcry/vk-io-redis-storage](https://github.com/xtcry/vk-io-redis-storage)
+
+  Redis storage adapter for [@vk-io/session](https://github.com/negezor/vk-io/tree/master/packages/session).
+
+  ```javascript
+  import { SessionManager } from '@vk-io/session';
+  import { RedisStorage } from 'vk-io-redis-storage';
+
+  const sessionManager = new SessionManager({
+      storage: new RedisStorage({
+          host: 'localhost',
+          port: 6379
+      })
+  });
+  ```
+
+  Perfect for production environments where you need persistent session storage across bot restarts.
+</Accordion>
+
+### Framework Integrations
+
+<Accordion title="nestjs-vk">
+  **Repository:** [xtcry/nestjs-vk](https://github.com/xtcry/nestjs-vk)
+
+  NestJS module for integrating VK-IO with [NestJS](https://github.com/nestjs/nest) framework.
+
+  Features:
+  - Dependency injection for VK-IO instances
+  - Decorator-based update handlers
+  - Seamless integration with NestJS ecosystem
+
+  ```typescript
+  import { VkModule } from 'nestjs-vk';
+
+  @Module({
+      imports: [
+          VkModule.forRoot({
+              token: process.env.VK_TOKEN
+          })
+      ]
+  })
+  export class AppModule {}
+  ```
+</Accordion>
+
+## Installation
+
+All packages can be installed using your preferred package manager:
+
+<CodeGroup>
+```bash npm
+npm install <package-name>
+```
+
+```bash yarn
+yarn add <package-name>
+```
+
+```bash pnpm
+pnpm add <package-name>
+```
+</CodeGroup>
+
+## Contributing Your Module
+
+Built something useful for the VK-IO community? We'd love to feature it here!
+
+<Steps>
+  <Step title="Ensure quality">
+    Make sure your package:
+    - Has clear documentation
+    - Includes TypeScript typings
+    - Is published on npm
+    - Has a public GitHub repository
+  </Step>
+  
+  <Step title="Submit a request">
+    [Create a new issue](https://github.com/negezor/vk-io/issues/new) on the VK-IO repository with:
+    - Package name and npm link
+    - GitHub repository link
+    - Brief description of functionality
+    - Example usage code
+  </Step>
+  
+  <Step title="Get listed">
+    Once reviewed, your package will be added to this page
+  </Step>
+</Steps>
+
+## Package Guidelines
+
+When building packages for VK-IO, consider these best practices:
+
+<CardGroup cols={2}>
+  <Card title="TypeScript Support" icon="code">
+    Include TypeScript definitions for better developer experience
+  </Card>
+  
+  <Card title="Documentation" icon="book">
+    Provide clear README with installation and usage examples
+  </Card>
+  
+  <Card title="Peer Dependencies" icon="link">
+    List vk-io as a peer dependency to avoid version conflicts
+  </Card>
+  
+  <Card title="Testing" icon="vial">
+    Include tests to ensure reliability and prevent regressions
+  </Card>
+</CardGroup>
+
+<Note>
+  Package naming convention: Use `vk-io-*` prefix for community packages to make them easily discoverable on npm.
+</Note>
+
+## Related Resources
+
+<CardGroup cols={2}>
+  <Card title="Contributing Guide" icon="code-pull-request" href="/resources/contributing">
+    Learn how to contribute to VK-IO core
+  </Card>
+  
+  <Card title="Examples" icon="code" href="/examples/simple-bot">
+    Explore example implementations
+  </Card>
+</CardGroup>

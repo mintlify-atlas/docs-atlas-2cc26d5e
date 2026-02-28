@@ -1,0 +1,417 @@
+---
+title: Helper Functions
+description: Utility functions for VK API operations
+icon: wrench
+---
+
+VK-IO provides a collection of helper functions for common operations like parameter encoding, HTML decoding, and peer type detection.
+
+## Execute Helpers
+
+Functions for working with VK's `execute` method.
+
+### getExecuteParams
+
+Converts parameters object to JSON string for execute method.
+
+```typescript
+import { getExecuteParams } from 'vk-io';
+
+const params = {
+  user_ids: [1, 2, 3],
+  fields: ['photo_100', 'city'],
+  count: 100
+};
+
+const encoded = getExecuteParams(params);
+// '{"user_ids":"1,2,3","fields":"photo_100,city","count":100}'
+```
+
+<ParamField path="params" type="Record<string, object | string>" required>
+  Parameters object to encode.
+</ParamField>
+
+**Returns:** `string` - JSON string with nested objects converted to strings.
+
+### getExecuteMethod
+
+Generates VKScript code for calling API method in execute.
+
+```typescript
+import { getExecuteMethod } from 'vk-io';
+
+const code = getExecuteMethod('users.get', {
+  user_ids: [1, 2, 3],
+  fields: ['photo_100']
+});
+// 'API.users.get({"user_ids":"1,2,3","fields":"photo_100"})'
+```
+
+<ParamField path="method" type="string" required>
+  VK API method name.
+</ParamField>
+
+<ParamField path="params" type="Record<string, object | string>" default="{}">
+  Method parameters.
+</ParamField>
+
+**Returns:** `string` - VKScript method call code.
+
+### getChainReturn
+
+Generates return statement for execute with multiple methods.
+
+```typescript
+import { getChainReturn } from 'vk-io';
+
+const methods = [
+  'API.users.get({"user_ids":1})',
+  'API.groups.getById({"group_id":1})',
+  'API.wall.get({"owner_id":1,"count":10})'
+];
+
+const code = getChainReturn(methods);
+// 'return [API.users.get({"user_ids":1}),API.groups.getById({"group_id":1}),API.wall.get({"owner_id":1,"count":10})];'
+```
+
+<ParamField path="methods" type="string[]" required>
+  Array of VKScript method calls.
+</ParamField>
+
+**Returns:** `string` - VKScript return statement.
+
+### resolveExecuteTask
+
+Resolves promises from execute batch based on results.
+
+```typescript
+import { resolveExecuteTask } from 'vk-io';
+
+const tasks = [
+  { resolve: (value) => {}, reject: (error) => {} },
+  { resolve: (value) => {}, reject: (error) => {} },
+  { resolve: (value) => {}, reject: (error) => {} }
+];
+
+const result = {
+  response: [{ id: 1 }, false, { id: 3 }],
+  errors: [{ error_code: 5, error_msg: 'Auth failed' }]
+};
+
+resolveExecuteTask(tasks, result);
+// tasks[0] resolves with { id: 1 }
+// tasks[1] rejects with error
+// tasks[2] resolves with { id: 3 }
+```
+
+<ParamField path="tasks" type="Array<{ resolve, reject }>" required>
+  Array of task objects with resolve/reject functions.
+</ParamField>
+
+<ParamField path="result" type="object" required>
+  Execute result with responses and errors.
+  <Expandable title="properties">
+    <ResponseField name="response" type="(object | false)[]">
+      Array of responses, `false` indicates error.
+    </ResponseField>
+    <ResponseField name="errors" type="object[]">
+      Array of error objects.
+    </ResponseField>
+  </Expandable>
+</ParamField>
+
+**Returns:** `void`
+
+## Utility Functions
+
+### getRandomId
+
+Generates random ID for messages and other entities.
+
+```typescript
+import { getRandomId } from 'vk-io';
+
+const randomId = getRandomId();
+// e.g., 45829374650000
+
+await vk.api.messages.send({
+  peer_id: 123456,
+  message: 'Hello!',
+  random_id: getRandomId()
+});
+```
+
+**Returns:** `number` - Random integer based on current timestamp.
+
+<Note>
+  Random IDs are used to prevent duplicate message sends. VK API will reject messages with the same `random_id` sent within a short time period.
+</Note>
+
+### delay
+
+Creates a promise that resolves after specified milliseconds.
+
+```typescript
+import { delay } from 'vk-io';
+
+// Wait 1 second
+await delay(1000);
+
+// Use in retry logic
+for (let i = 0; i < 3; i++) {
+  try {
+    await vk.api.messages.send({ ... });
+    break;
+  } catch (error) {
+    if (i < 2) {
+      await delay(1000 * (i + 1));
+    }
+  }
+}
+```
+
+<ParamField path="delayed" type="number" required>
+  Number of milliseconds to delay.
+</ParamField>
+
+**Returns:** `Promise<void>` - Promise that resolves after delay.
+
+### unescapeHTML
+
+Decodes HTML entities in text from VK API.
+
+```typescript
+import { unescapeHTML } from 'vk-io';
+
+const encoded = 'Hello &amp; welcome!&lt;br&gt;New line &quot;here&quot;';
+const decoded = unescapeHTML(encoded);
+// 'Hello & welcome!\nNew line "here"'
+```
+
+<ParamField path="text" type="string" required>
+  Text with HTML entities.
+</ParamField>
+
+**Returns:** `string` - Decoded text.
+
+**Decodes:**
+- `&lt;` → `<`
+- `&gt;` → `>`
+- `&amp;` → `&`
+- `&quot;` → `"`
+- `<br>` → `\n`
+
+### pickProperties
+
+Extracts specified properties from object.
+
+```typescript
+import { pickProperties } from 'vk-io';
+
+const user = {
+  id: 1,
+  first_name: 'Pavel',
+  last_name: 'Durov',
+  photo_100: 'https://...',
+  city: { id: 1, title: 'Moscow' }
+};
+
+const limited = pickProperties(user, ['id', 'first_name', 'last_name']);
+// { id: 1, first_name: 'Pavel', last_name: 'Durov' }
+```
+
+<ParamField path="params" type="T" required>
+  Source object.
+</ParamField>
+
+<ParamField path="properties" type="K[]" required>
+  Array of property keys to extract.
+</ParamField>
+
+**Returns:** `Pick<T, K>` - New object with only specified properties.
+
+### getPeerType
+
+Determines peer type from peer ID.
+
+```typescript
+import { getPeerType } from 'vk-io';
+
+getPeerType(1);           // 'user'
+getPeerType(-1);          // 'group'
+getPeerType(2000000001);  // 'chat'
+```
+
+<ParamField path="id" type="number" required>
+  Peer ID to check.
+</ParamField>
+
+**Returns:** `string` - One of: `'user'`, `'group'`, `'chat'`, `'email'`.
+
+**Peer ID Ranges:**
+- Positive (1 to 2,000,000,000): User
+- Negative: Group/Community
+- Above 2,000,000,000: Chat
+
+## Advanced Helpers
+
+### applyMixins
+
+Applies mixin classes to a target class (used internally).
+
+```typescript
+import { applyMixins } from 'vk-io';
+
+class Base {}
+class Mixin1 {
+  method1() {}
+}
+class Mixin2 {
+  method2() {}
+}
+
+applyMixins(Base, [Mixin1, Mixin2]);
+// Base now has method1 and method2
+```
+
+<ParamField path="derivedCtor" type="any" required>
+  Target constructor to apply mixins to.
+</ParamField>
+
+<ParamField path="baseCtors" type="any[]" required>
+  Array of mixin constructors.
+</ParamField>
+
+**Returns:** `void`
+
+### showDeprecatedMessage
+
+Displays deprecation warning in console.
+
+```typescript
+import { showDeprecatedMessage } from 'vk-io';
+
+showDeprecatedMessage('Method oldMethod() is deprecated, use newMethod() instead');
+// Output: \u001b[31mDeprecated:\u001b[39m Method oldMethod() is deprecated, use newMethod() instead
+```
+
+<ParamField path="message" type="string" required>
+  Deprecation message to display.
+</ParamField>
+
+**Returns:** `void`
+
+## Usage Examples
+
+### Building Execute Code
+
+```typescript
+import { getExecuteMethod, getChainReturn } from 'vk-io';
+
+const methods = [
+  getExecuteMethod('users.get', { user_ids: 1 }),
+  getExecuteMethod('groups.getById', { group_id: 1 }),
+  getExecuteMethod('wall.get', { owner_id: 1, count: 10 })
+];
+
+const code = getChainReturn(methods);
+
+const result = await vk.api.execute({ code });
+```
+
+### Peer Type Detection
+
+```typescript
+import { getPeerType } from 'vk-io';
+
+const handleMessage = async (message) => {
+  const peerType = getPeerType(message.peerId);
+  
+  switch (peerType) {
+    case 'user':
+      console.log('Message from user');
+      break;
+    case 'chat':
+      console.log('Message from chat');
+      break;
+    case 'group':
+      console.log('Message from group');
+      break;
+  }
+};
+```
+
+### Retry with Delay
+
+```typescript
+import { delay } from 'vk-io';
+
+const retryRequest = async (fn, retries = 3) => {
+  for (let i = 0; i < retries; i++) {
+    try {
+      return await fn();
+    } catch (error) {
+      if (i === retries - 1) throw error;
+      
+      const delayMs = 1000 * Math.pow(2, i); // Exponential backoff
+      console.log(`Retry ${i + 1}/${retries} after ${delayMs}ms`);
+      await delay(delayMs);
+    }
+  }
+};
+
+const result = await retryRequest(() => 
+  vk.api.users.get({ user_ids: 1 })
+);
+```
+
+### Clean HTML Content
+
+```typescript
+import { unescapeHTML } from 'vk-io';
+
+const wall = await vk.api.wall.get({ owner_id: 1, count: 10 });
+
+const posts = wall.items.map(post => ({
+  id: post.id,
+  text: unescapeHTML(post.text),
+  date: new Date(post.date * 1000)
+}));
+```
+
+### Filter Object Properties
+
+```typescript
+import { pickProperties } from 'vk-io';
+
+const users = await vk.api.users.get({
+  user_ids: [1, 2, 3],
+  fields: ['photo_100', 'city', 'verified', 'followers_count']
+});
+
+// Extract only needed fields for response
+const limitedUsers = users.map(user => 
+  pickProperties(user, ['id', 'first_name', 'last_name', 'photo_100'])
+);
+```
+
+## Constants
+
+### PEER_CHAT_ID_OFFSET
+
+Offset value for chat peer IDs.
+
+```typescript
+import { PEER_CHAT_ID_OFFSET } from 'vk-io';
+
+console.log(PEER_CHAT_ID_OFFSET); // 2000000000
+
+// Convert chat local ID to peer ID
+const chatId = 1;
+const peerId = PEER_CHAT_ID_OFFSET + chatId;
+// peerId = 2000000001
+```
+
+<Note>
+  VK uses 2,000,000,000 as the base offset for chat IDs. Local chat ID 1 becomes peer ID 2000000001.
+</Note>

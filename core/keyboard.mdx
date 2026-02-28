@@ -1,0 +1,576 @@
+---
+title: Keyboard Builder
+description: Create interactive keyboards with buttons, colors, and callback actions
+---
+
+The Keyboard module provides a builder pattern for creating VK message keyboards with various button types and layouts.
+
+## Creating Keyboards
+
+There are two ways to create keyboards, both return a `KeyboardBuilder` instance:
+
+<Tabs>
+  <Tab title="Builder Pattern">
+    **Recommended approach** with chainable methods:
+    
+    ```typescript
+    import { Keyboard } from 'vk-io';
+    
+    const keyboard = Keyboard.builder()
+      .textButton({
+        label: 'Start',
+        payload: { command: 'start' },
+        color: Keyboard.PRIMARY_COLOR
+      })
+      .row()
+      .textButton({
+        label: 'Help',
+        payload: { command: 'help' }
+      })
+      .textButton({
+        label: 'Settings',
+        payload: { command: 'settings' }
+      })
+      .row()
+      .textButton({
+        label: 'Cancel',
+        color: Keyboard.NEGATIVE_COLOR
+      })
+      .oneTime();
+    ```
+  </Tab>
+  
+  <Tab title="Array Construction">
+    Define keyboard structure as nested arrays:
+    
+    ```typescript
+    import { Keyboard } from 'vk-io';
+    
+    const keyboard = Keyboard.keyboard([
+      // Row 1: Single button
+      [
+        Keyboard.textButton({
+          label: 'Start',
+          payload: { command: 'start' },
+          color: Keyboard.PRIMARY_COLOR
+        })
+      ],
+      // Row 2: Two buttons
+      [
+        Keyboard.textButton({
+          label: 'Help',
+          payload: { command: 'help' }
+        }),
+        Keyboard.textButton({
+          label: 'Settings',
+          payload: { command: 'settings' }
+        })
+      ],
+      // Row 3: Single button (alternative syntax)
+      Keyboard.textButton({
+        label: 'Cancel',
+        color: Keyboard.NEGATIVE_COLOR
+      })
+    ]);
+    ```
+  </Tab>
+</Tabs>
+
+## Sending Keyboards
+
+```typescript
+// Send with message
+await api.messages.send({
+  peer_id: 123456,
+  message: 'Choose an option:',
+  keyboard: keyboard,
+  random_id: 0
+});
+
+// Or with context
+await context.send('Choose an option:', {
+  keyboard: keyboard
+});
+```
+
+## Keyboard Limits
+
+<Warning>
+  Keyboard size restrictions:
+  
+  - **Regular keyboard**: 10 rows × 5 buttons per row
+  - **Inline keyboard**: 6 rows × 5 buttons per row
+  - **Wide buttons** (URL, Location, Pay, App): occupy 2 button spaces
+</Warning>
+
+## Button Types
+
+### Text Button
+
+Standard clickable button that sends text when pressed:
+
+```typescript
+keyboard.textButton({
+  label: 'Buy Coffee',
+  payload: {
+    command: 'buy',
+    item: 'coffee',
+    price: 3.50
+  },
+  color: Keyboard.POSITIVE_COLOR
+});
+```
+
+<ParamField path="label" type="string" required>
+  Button text (max 40 characters)
+</ParamField>
+
+<ParamField path="payload" type="object">
+  Custom data (max 255 chars as JSON). Available in `context.messagePayload`
+</ParamField>
+
+<ParamField path="color" type="ButtonColor">
+  Button color: `PRIMARY`, `SECONDARY`, `NEGATIVE`, or `POSITIVE`
+</ParamField>
+
+### Callback Button
+
+Silent button that triggers `message_event` without sending a message:
+
+```typescript
+keyboard.callbackButton({
+  label: 'Like',
+  payload: {
+    action: 'like',
+    post_id: 123
+  },
+  color: Keyboard.POSITIVE_COLOR
+});
+
+// Handle callback
+updates.on('message_event', async (context) => {
+  const { action, post_id } = context.eventPayload;
+  
+  if (action === 'like') {
+    await api.likes.add({
+      type: 'post',
+      item_id: post_id
+    });
+    
+    // Show notification
+    await context.showSnackbar('Liked!');
+  }
+});
+```
+
+<ParamField path="label" type="string" required>
+  Button text (max 40 characters)
+</ParamField>
+
+<ParamField path="payload" type="object">
+  Custom data. Available in `context.eventPayload`
+</ParamField>
+
+<ParamField path="color" type="ButtonColor">
+  Button color
+</ParamField>
+
+<Tip>
+  Callback buttons don't flood the chat with user messages. Perfect for inline actions like ratings, pagination, or toggles.
+</Tip>
+
+### URL Button
+
+Opens a link when pressed (takes 2 button slots):
+
+```typescript
+keyboard.urlButton({
+  label: 'Visit Website',
+  url: 'https://example.com',
+  payload: { source: 'keyboard' }
+});
+```
+
+<ParamField path="label" type="string" required>
+  Button text (max 40 characters)
+</ParamField>
+
+<ParamField path="url" type="string" required>
+  URL to open
+</ParamField>
+
+<ParamField path="payload" type="object">
+  Optional custom data
+</ParamField>
+
+### Location Request Button
+
+Requests user's location (takes 2 button slots):
+
+```typescript
+keyboard.locationRequestButton({
+  payload: {
+    command: 'order_delivery'
+  }
+});
+
+// Handle location
+updates.on('message', (context) => {
+  if (context.geo) {
+    const { latitude, longitude } = context.geo.coordinates;
+    console.log(`Location: ${latitude}, ${longitude}`);
+  }
+});
+```
+
+### VK Pay Button
+
+Initiates VK Pay transaction (takes 2 button slots):
+
+```typescript
+keyboard.payButton({
+  payload: { order_id: '12345' },
+  hash: {
+    action: 'pay-to-group',
+    group_id: 123456,
+    amount: 100,
+    description: 'Coffee order',
+    aid: 10
+  }
+});
+
+// Or with string hash
+keyboard.payButton({
+  payload: {},
+  hash: 'action=transfer-to-group&group_id=123456&aid=10'
+});
+```
+
+**Hash object options**:
+
+<CodeGroup>
+```typescript Pay to Group
+{
+  action: 'pay-to-group',
+  group_id: 123456,
+  amount: 100,          // Rubles
+  description: 'Order',
+  data: 'custom_data',
+  aid: 10               // App ID
+}
+```
+
+```typescript Pay to User
+{
+  action: 'pay-to-user',
+  user_id: 123456,
+  amount: 50,
+  description: 'Payment',
+  aid: 10
+}
+```
+
+```typescript Transfer to Group
+{
+  action: 'transfer-to-group',
+  group_id: 123456,
+  aid: 10
+}
+```
+
+```typescript Transfer to User
+{
+  action: 'transfer-to-user',
+  user_id: 123456,
+  aid: 10
+}
+```
+</CodeGroup>
+
+### VK App Button
+
+Opens a VK Mini App (takes 2 button slots):
+
+```typescript
+keyboard.applicationButton({
+  label: 'Open App',
+  appId: 6232540,
+  ownerId: -157525928,
+  hash: 'profile'  // Navigation hash
+});
+```
+
+<ParamField path="label" type="string" required>
+  Button text (max 40 characters)
+</ParamField>
+
+<ParamField path="appId" type="number" required>
+  VK App ID
+</ParamField>
+
+<ParamField path="ownerId" type="number">
+  Community ID where app is installed (negative for groups)
+</ParamField>
+
+<ParamField path="hash" type="string">
+  Navigation parameter (passed after `#` in app URL)
+</ParamField>
+
+## Button Colors
+
+Four color options for text and callback buttons:
+
+| Constant | Color | Use Case | Hex |
+|----------|-------|----------|-----|
+| `Keyboard.SECONDARY_COLOR` | White | Neutral actions | #FFFFFF |
+| `Keyboard.PRIMARY_COLOR` | Blue | Primary actions | #5181B8 |
+| `Keyboard.POSITIVE_COLOR` | Green | Confirm, agree, accept | #4BB34B |
+| `Keyboard.NEGATIVE_COLOR` | Red | Dangerous, delete, cancel | #E64646 |
+
+```typescript
+const keyboard = Keyboard.builder()
+  .textButton({
+    label: 'Continue',
+    color: Keyboard.PRIMARY_COLOR
+  })
+  .textButton({
+    label: 'Accept',
+    color: Keyboard.POSITIVE_COLOR
+  })
+  .row()
+  .textButton({
+    label: 'Cancel',
+    color: Keyboard.NEGATIVE_COLOR
+  })
+  .textButton({
+    label: 'Back',
+    color: Keyboard.SECONDARY_COLOR
+  });
+```
+
+<Note>
+  Actual colors may vary based on user's VK theme (light/dark mode).
+</Note>
+
+## Layout Methods
+
+### Add Row
+
+Move to the next row:
+
+```typescript
+const keyboard = Keyboard.builder()
+  .textButton({ label: 'Button 1' })
+  .textButton({ label: 'Button 2' })
+  .row()  // New row
+  .textButton({ label: 'Button 3' })
+  .textButton({ label: 'Button 4' });
+```
+
+### One-Time Keyboard
+
+Hide keyboard after button press:
+
+```typescript
+const keyboard = Keyboard.builder()
+  .textButton({ label: 'Yes' })
+  .textButton({ label: 'No' })
+  .oneTime();
+```
+
+<Note>
+  One-time keyboards don't work with inline keyboards.
+</Note>
+
+### Inline Keyboard
+
+Attach keyboard to specific message:
+
+```typescript
+const keyboard = Keyboard.builder()
+  .callbackButton({
+    label: 'Edit',
+    payload: { action: 'edit' }
+  })
+  .callbackButton({
+    label: 'Delete',
+    payload: { action: 'delete' }
+  })
+  .inline();
+
+await context.send('Post created', { keyboard });
+```
+
+<Tip>
+  Inline keyboards are perfect for message-specific actions like "Edit", "Delete", or "Show More".
+</Tip>
+
+## Advanced Usage
+
+### Clone Keyboard
+
+```typescript
+const baseKeyboard = Keyboard.builder()
+  .textButton({ label: 'Help' })
+  .textButton({ label: 'Settings' });
+
+const keyboard1 = baseKeyboard.clone()
+  .row()
+  .textButton({ label: 'Option A' });
+
+const keyboard2 = baseKeyboard.clone()
+  .row()
+  .textButton({ label: 'Option B' });
+```
+
+### Remove Keyboard
+
+Send empty keyboard to remove:
+
+```typescript
+await context.send('Keyboard removed', {
+  keyboard: Keyboard.builder()
+});
+
+// Or use JSON string
+await api.messages.send({
+  peer_id: 123456,
+  message: 'Keyboard removed',
+  keyboard: JSON.stringify({ buttons: [] }),
+  random_id: 0
+});
+```
+
+### Dynamic Keyboards
+
+```typescript
+function createMenuKeyboard(userRole: string) {
+  const keyboard = Keyboard.builder();
+  
+  // Common buttons
+  keyboard
+    .textButton({ label: 'Profile' })
+    .textButton({ label: 'Help' })
+    .row();
+  
+  // Role-specific buttons
+  if (userRole === 'admin') {
+    keyboard
+      .textButton({
+        label: 'Admin Panel',
+        color: Keyboard.NEGATIVE_COLOR
+      })
+      .row();
+  }
+  
+  keyboard.textButton({
+    label: 'Logout',
+    color: Keyboard.SECONDARY_COLOR
+  });
+  
+  return keyboard;
+}
+
+await context.send('Menu:', {
+  keyboard: createMenuKeyboard('admin')
+});
+```
+
+### Pagination Keyboard
+
+```typescript
+function createPaginationKeyboard(page: number, totalPages: number) {
+  const keyboard = Keyboard.builder().inline();
+  
+  if (page > 1) {
+    keyboard.callbackButton({
+      label: '◀️ Previous',
+      payload: { action: 'page', page: page - 1 }
+    });
+  }
+  
+  keyboard.callbackButton({
+    label: `${page} / ${totalPages}`,
+    payload: { action: 'current' }
+  });
+  
+  if (page < totalPages) {
+    keyboard.callbackButton({
+      label: 'Next ▶️',
+      payload: { action: 'page', page: page + 1 }
+    });
+  }
+  
+  return keyboard;
+}
+
+updates.on('message_event', async (context) => {
+  const { action, page } = context.eventPayload;
+  
+  if (action === 'page') {
+    await context.editMessage({
+      message: `Page ${page} content`,
+      keyboard: createPaginationKeyboard(page, 10)
+    });
+  }
+});
+```
+
+## Complete Example
+
+```typescript
+import { Keyboard } from 'vk-io';
+
+// Main menu keyboard
+const mainMenu = Keyboard.builder()
+  .textButton({
+    label: 'Shop',
+    payload: { command: 'shop' },
+    color: Keyboard.PRIMARY_COLOR
+  })
+  .textButton({
+    label: 'Orders',
+    payload: { command: 'orders' }
+  })
+  .row()
+  .textButton({
+    label: 'Profile',
+    payload: { command: 'profile' }
+  })
+  .textButton({
+    label: 'Support',
+    payload: { command: 'support' }
+  })
+  .row()
+  .urlButton({
+    label: 'Website',
+    url: 'https://example.com'
+  })
+  .oneTime();
+
+// Inline action keyboard
+const itemActions = Keyboard.builder()
+  .callbackButton({
+    label: 'Add to Cart',
+    payload: { action: 'add_to_cart', item_id: 123 },
+    color: Keyboard.POSITIVE_COLOR
+  })
+  .row()
+  .callbackButton({
+    label: 'Details',
+    payload: { action: 'details', item_id: 123 }
+  })
+  .urlButton({
+    label: 'Reviews',
+    url: 'https://example.com/item/123/reviews'
+  })
+  .inline();
+
+// Send keyboards
+await context.send('Welcome!', { keyboard: mainMenu });
+await context.send('Coffee - $3.50', { keyboard: itemActions });
+```
+
+<Tip>
+  Combine keyboard types: use regular keyboards for navigation and inline keyboards for item-specific actions.
+</Tip>

@@ -1,0 +1,696 @@
+---
+title: 'Attachments'
+description: 'Attachment classes for handling VK media types (photos, videos, documents, etc.)'
+---
+
+# Attachments
+
+VK-IO provides specialized attachment classes for all VK media types. All attachment classes extend the base `Attachment` class.
+
+## Base Attachment Class
+
+The base class for all attachments.
+
+### Properties
+
+<ResponseField name="type" type="string">
+  The attachment type (e.g., 'photo', 'video', 'audio', 'doc')
+</ResponseField>
+
+<ResponseField name="id" type="number">
+  The attachment ID
+</ResponseField>
+
+<ResponseField name="ownerId" type="number">
+  The owner ID (user or community)
+</ResponseField>
+
+<ResponseField name="accessKey" type="string | undefined">
+  Access key for private attachments
+</ResponseField>
+
+<ResponseField name="isFilled" type="boolean">
+  Whether the attachment has full data loaded
+</ResponseField>
+
+<ResponseField name="canBeAttached" type="boolean">
+  Whether the attachment can be attached via string representation
+</ResponseField>
+
+### Methods
+
+#### fromString(attachment, api)
+
+Parses an attachment from a string.
+
+<ParamField path="attachment" type="string" required>
+  Attachment string (e.g., "photo123_456" or "photo123_456_abc")
+</ParamField>
+
+<ParamField path="api" type="API" required>
+  API instance
+</ParamField>
+
+```typescript
+const attachment = Attachment.fromString('photo123_456', vk.api);
+```
+
+**Returns:** `Attachment`
+
+#### equals(attachment)
+
+Checks if this attachment is equivalent to another.
+
+<ParamField path="attachment" type="Attachment | string" required>
+  Attachment to compare with
+</ParamField>
+
+```typescript
+if (attachment1.equals('photo123_456')) {
+  console.log('Same attachment');
+}
+```
+
+**Returns:** `boolean`
+
+#### toString()
+
+Returns the string representation for VK API.
+
+```typescript
+const str = attachment.toString(); // "photo123_456" or "photo123_456_abc"
+```
+
+**Returns:** `string`
+
+#### toJSON()
+
+Returns JSON representation of the attachment.
+
+**Returns:** `object`
+
+---
+
+## PhotoAttachment
+
+Represents a photo attachment.
+
+### Properties
+
+<ResponseField name="userId" type="number | undefined">
+  ID of the user who uploaded the photo
+</ResponseField>
+
+<ResponseField name="albumId" type="number | undefined">
+  Album ID containing the photo
+</ResponseField>
+
+<ResponseField name="text" type="string | undefined">
+  Photo caption
+</ResponseField>
+
+<ResponseField name="createdAt" type="number | undefined">
+  Upload timestamp (Unix time)
+</ResponseField>
+
+<ResponseField name="width" type="number | undefined">
+  Photo width in pixels
+</ResponseField>
+
+<ResponseField name="height" type="number | undefined">
+  Photo height in pixels
+</ResponseField>
+
+<ResponseField name="smallSizeUrl" type="string | undefined">
+  URL of small photo (130 or 75px)
+</ResponseField>
+
+<ResponseField name="mediumSizeUrl" type="string | undefined">
+  URL of medium photo (807, 604px or less)
+</ResponseField>
+
+<ResponseField name="largeSizeUrl" type="string | undefined">
+  URL of large photo (2560, 1280px or less)
+</ResponseField>
+
+<ResponseField name="sizes" type="IPhotoSize[] | undefined">
+  Array of all available photo sizes
+</ResponseField>
+
+### Methods
+
+#### loadAttachmentPayload()
+
+Loads full photo data from VK API if not already loaded.
+
+```typescript
+await photo.loadAttachmentPayload();
+console.log(photo.largeSizeUrl);
+```
+
+**Returns:** `Promise<void>`
+
+#### getSizes(sizeTypes)
+
+Returns photo sizes of specified types.
+
+<ParamField path="sizeTypes" type="string[]" required>
+  Array of size type identifiers (e.g., ['w', 'z', 'y'])
+</ParamField>
+
+```typescript
+const largeSizes = photo.getSizes(['w', 'z']);
+```
+
+**Returns:** `IPhotoSize[]`
+
+### IPhotoSize
+
+<Expandable title="Photo Size Object">
+  <ResponseField name="type" type="string">
+    Size identifier (s, m, x, y, z, w, etc.)
+  </ResponseField>
+  <ResponseField name="url" type="string">
+    Photo URL
+  </ResponseField>
+  <ResponseField name="width" type="number">
+    Width in pixels
+  </ResponseField>
+  <ResponseField name="height" type="number">
+    Height in pixels
+  </ResponseField>
+</Expandable>
+
+### Usage Example
+
+```typescript
+const photo = new PhotoAttachment({
+  api: vk.api,
+  payload: {
+    id: 456,
+    owner_id: 123,
+    sizes: [/* ... */],
+  },
+});
+
+await photo.loadAttachmentPayload();
+console.log(photo.largeSizeUrl);
+console.log(photo.width, photo.height);
+```
+
+---
+
+## VideoAttachment
+
+Represents a video attachment.
+
+### Properties
+
+<ResponseField name="title" type="string | undefined">
+  Video title
+</ResponseField>
+
+<ResponseField name="description" type="string | undefined">
+  Video description
+</ResponseField>
+
+<ResponseField name="duration" type="number | undefined">
+  Video duration in seconds
+</ResponseField>
+
+<ResponseField name="createdAt" type="number | undefined">
+  Upload timestamp
+</ResponseField>
+
+<ResponseField name="addedAt" type="number | undefined">
+  Added to user's videos timestamp
+</ResponseField>
+
+<ResponseField name="viewsCount" type="number | undefined">
+  Number of views
+</ResponseField>
+
+<ResponseField name="commentsCount" type="number | undefined">
+  Number of comments
+</ResponseField>
+
+<ResponseField name="player" type="string | undefined">
+  URL to the video player page
+</ResponseField>
+
+<ResponseField name="platformName" type="string | undefined">
+  Platform name for external videos
+</ResponseField>
+
+<ResponseField name="isRepeat" type="boolean | undefined">
+  Whether the video is repeatable
+</ResponseField>
+
+<ResponseField name="isCanAdd" type="boolean | undefined">
+  Whether user can add the video
+</ResponseField>
+
+<ResponseField name="isCanEdit" type="boolean | undefined">
+  Whether user can edit the video
+</ResponseField>
+
+<ResponseField name="isProcessing" type="boolean | undefined">
+  Whether the video is being processed
+</ResponseField>
+
+<ResponseField name="isBroadcast" type="boolean | undefined">
+  Whether the video is a live broadcast
+</ResponseField>
+
+<ResponseField name="isUpcoming" type="boolean | undefined">
+  Whether the video is an upcoming broadcast
+</ResponseField>
+
+<ResponseField name="isFavorited" type="boolean | undefined">
+  Whether the video is bookmarked
+</ResponseField>
+
+### Methods
+
+#### loadAttachmentPayload()
+
+Loads full video data from VK API.
+
+**Returns:** `Promise<void>`
+
+---
+
+## AudioAttachment
+
+Represents an audio attachment.
+
+### Properties
+
+<ResponseField name="title" type="string | undefined">
+  Track title
+</ResponseField>
+
+<ResponseField name="artist" type="string | undefined">
+  Artist name
+</ResponseField>
+
+<ResponseField name="duration" type="number | undefined">
+  Track duration in seconds
+</ResponseField>
+
+<ResponseField name="url" type="string | undefined">
+  Audio file URL
+</ResponseField>
+
+<ResponseField name="lyricsId" type="number | undefined">
+  Lyrics identifier
+</ResponseField>
+
+<ResponseField name="albumId" type="number | undefined">
+  Album identifier
+</ResponseField>
+
+<ResponseField name="genreId" type="number | undefined">
+  Genre identifier
+</ResponseField>
+
+<ResponseField name="createdAt" type="number | undefined">
+  Upload timestamp
+</ResponseField>
+
+<ResponseField name="isHq" type="boolean | undefined">
+  Whether the audio is high quality
+</ResponseField>
+
+### Methods
+
+#### loadAttachmentPayload()
+
+Loads full audio data from VK API.
+
+**Returns:** `Promise<void>`
+
+---
+
+## DocumentAttachment
+
+Represents a document attachment.
+
+### Properties
+
+<ResponseField name="title" type="string | undefined">
+  Document title
+</ResponseField>
+
+<ResponseField name="size" type="number | undefined">
+  File size in bytes
+</ResponseField>
+
+<ResponseField name="extension" type="string | undefined">
+  File extension
+</ResponseField>
+
+<ResponseField name="url" type="string | undefined">
+  Download URL
+</ResponseField>
+
+<ResponseField name="createdAt" type="number | undefined">
+  Upload timestamp
+</ResponseField>
+
+<ResponseField name="typeId" type="1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | undefined">
+  Document type: 1=text, 2=archive, 3=gif, 4=image, 5=audio, 6=video, 7=e-book, 8=unknown
+</ResponseField>
+
+<ResponseField name="preview" type="object | undefined">
+  Preview data (for images, graffiti, voice messages)
+</ResponseField>
+
+<ResponseField name="isText" type="boolean | undefined">
+  Whether the document is a text file
+</ResponseField>
+
+<ResponseField name="isArchive" type="boolean | undefined">
+  Whether the document is an archive
+</ResponseField>
+
+<ResponseField name="isGif" type="boolean | undefined">
+  Whether the document is a GIF
+</ResponseField>
+
+<ResponseField name="isImage" type="boolean | undefined">
+  Whether the document is an image
+</ResponseField>
+
+<ResponseField name="isGraffiti" type="boolean | undefined">
+  Whether the document is a graffiti
+</ResponseField>
+
+<ResponseField name="isAudio" type="boolean | undefined">
+  Whether the document is an audio file
+</ResponseField>
+
+<ResponseField name="isVoice" type="boolean | undefined">
+  Whether the document is a voice message
+</ResponseField>
+
+<ResponseField name="isVideo" type="boolean | undefined">
+  Whether the document is a video file
+</ResponseField>
+
+<ResponseField name="isBook" type="boolean | undefined">
+  Whether the document is an e-book
+</ResponseField>
+
+### Methods
+
+#### loadAttachmentPayload()
+
+Loads full document data from VK API.
+
+**Returns:** `Promise<void>`
+
+#### hasPreviewProperty(name)
+
+Checks if the document has a specific preview property.
+
+<ParamField path="name" type="'photo' | 'graffiti' | 'audio_message'" required>
+  Preview property name
+</ParamField>
+
+**Returns:** `boolean`
+
+---
+
+## WallAttachment
+
+Represents a wall post attachment.
+
+### Properties
+
+<ResponseField name="text" type="string | undefined">
+  Post text
+</ResponseField>
+
+<ResponseField name="authorId" type="number | undefined">
+  Author ID
+</ResponseField>
+
+<ResponseField name="createdAt" type="number | undefined">
+  Post creation timestamp
+</ResponseField>
+
+<ResponseField name="postType" type="string | undefined">
+  Post type
+</ResponseField>
+
+<ResponseField name="viewsCount" type="number | undefined">
+  Number of views
+</ResponseField>
+
+<ResponseField name="likesCount" type="number | undefined">
+  Number of likes
+</ResponseField>
+
+<ResponseField name="repostsCount" type="number | undefined">
+  Number of reposts
+</ResponseField>
+
+<ResponseField name="commentsCount" type="number | undefined">
+  Number of comments
+</ResponseField>
+
+<ResponseField name="attachments" type="(Attachment | ExternalAttachment)[]">
+  Attachments in the post
+</ResponseField>
+
+<ResponseField name="copyHistory" type="WallAttachment[] | undefined">
+  Repost history
+</ResponseField>
+
+<ResponseField name="signerId" type="number | undefined">
+  ID of the user who signed the post
+</ResponseField>
+
+<ResponseField name="isPinned" type="boolean | undefined">
+  Whether the post is pinned
+</ResponseField>
+
+<ResponseField name="isFavorited" type="boolean | undefined">
+  Whether the post is bookmarked
+</ResponseField>
+
+<ResponseField name="hasComments" type="boolean | undefined">
+  Whether the post has comments
+</ResponseField>
+
+<ResponseField name="hasAds" type="boolean | undefined">
+  Whether the post contains ads
+</ResponseField>
+
+<ResponseField name="hasUserLike" type="boolean | undefined">
+  Whether the current user liked the post
+</ResponseField>
+
+<ResponseField name="isCanEdit" type="boolean | undefined">
+  Whether the user can edit the post
+</ResponseField>
+
+<ResponseField name="isCanDelete" type="boolean | undefined">
+  Whether the user can delete the post
+</ResponseField>
+
+### Methods
+
+#### loadAttachmentPayload()
+
+Loads full post data from VK API.
+
+**Returns:** `Promise<void>`
+
+---
+
+## PollAttachment
+
+Represents a poll attachment.
+
+### Properties
+
+<ResponseField name="question" type="string | undefined">
+  Poll question
+</ResponseField>
+
+<ResponseField name="authorId" type="number | undefined">
+  Poll creator ID
+</ResponseField>
+
+<ResponseField name="createdAt" type="number | undefined">
+  Poll creation timestamp
+</ResponseField>
+
+<ResponseField name="endedAt" type="number | undefined">
+  Poll end timestamp (0 if unlimited)
+</ResponseField>
+
+<ResponseField name="votes" type="number | undefined">
+  Total number of votes
+</ResponseField>
+
+<ResponseField name="answerIds" type="number[] | undefined">
+  IDs of answers selected by current user
+</ResponseField>
+
+<ResponseField name="answers" type="object[] | undefined">
+  Array of poll answers
+</ResponseField>
+
+<ResponseField name="friends" type="number[] | undefined">
+  IDs of up to 3 friends who voted
+</ResponseField>
+
+<ResponseField name="background" type="object | undefined">
+  Poll background configuration
+</ResponseField>
+
+<ResponseField name="photo" type="PhotoAttachment | undefined">
+  Poll photo
+</ResponseField>
+
+<ResponseField name="isAnonymous" type="boolean | undefined">
+  Whether the poll is anonymous
+</ResponseField>
+
+<ResponseField name="isMultiple" type="boolean | undefined">
+  Whether multiple answers are allowed
+</ResponseField>
+
+<ResponseField name="isClosed" type="boolean | undefined">
+  Whether the poll is closed
+</ResponseField>
+
+<ResponseField name="isBoard" type="boolean | undefined">
+  Whether the poll is attached to a discussion
+</ResponseField>
+
+<ResponseField name="isCanEdit" type="boolean | undefined">
+  Whether the user can edit the poll
+</ResponseField>
+
+<ResponseField name="isCanVote" type="boolean | undefined">
+  Whether the user can vote
+</ResponseField>
+
+### Methods
+
+#### loadAttachmentPayload()
+
+Loads full poll data from VK API.
+
+**Returns:** `Promise<void>`
+
+---
+
+## StickerAttachment
+
+Represents a sticker attachment.
+
+### Properties
+
+<ResponseField name="id" type="number">
+  Sticker ID
+</ResponseField>
+
+<ResponseField name="productId" type="number">
+  Sticker pack ID
+</ResponseField>
+
+<ResponseField name="images" type="IStickerImage[]">
+  Array of sticker images
+</ResponseField>
+
+<ResponseField name="imagesWithBackground" type="IStickerImage[]">
+  Array of sticker images with backgrounds
+</ResponseField>
+
+### IStickerImage
+
+<Expandable title="Sticker Image Object">
+  <ResponseField name="url" type="string">
+    Image URL
+  </ResponseField>
+  <ResponseField name="width" type="number">
+    Image width
+  </ResponseField>
+  <ResponseField name="height" type="number">
+    Image height
+  </ResponseField>
+</Expandable>
+
+---
+
+## Other Attachment Types
+
+VK-IO also provides these attachment classes:
+
+- **AudioMessageAttachment** - Voice messages
+- **GiftAttachment** - Gifts
+- **GraffitiAttachment** - Graffiti images
+- **LinkAttachment** - Shared links
+- **MarketAttachment** - Market items
+- **MarketAlbumAttachment** - Market collections
+- **StoryAttachment** - Stories
+- **WallReplyAttachment** - Wall comment replies
+
+All follow the same pattern with specific properties for their type.
+
+## Helper Functions
+
+### transformAttachments(attachments, api)
+
+Transforms raw VK API attachment data into typed attachment instances.
+
+<ParamField path="attachments" type="object[]" required>
+  Raw attachment data from VK API
+</ParamField>
+
+<ParamField path="api" type="API" required>
+  API instance
+</ParamField>
+
+```typescript
+import { transformAttachments } from 'vk-io';
+
+const attachments = transformAttachments(rawAttachments, vk.api);
+```
+
+**Returns:** `(Attachment | ExternalAttachment)[]`
+
+## Usage Example
+
+```typescript
+import { PhotoAttachment, VideoAttachment } from 'vk-io';
+
+// Create from payload
+const photo = new PhotoAttachment({
+  api: vk.api,
+  payload: {
+    id: 456,
+    owner_id: 123,
+    sizes: [/* ... */],
+  },
+});
+
+// Parse from string
+const video = Attachment.fromString('video123_456', vk.api) as VideoAttachment;
+
+// Load full data
+await video.loadAttachmentPayload();
+console.log(video.title, video.duration);
+
+// Use in messages
+await vk.api.messages.send({
+  peer_id: userId,
+  message: 'Check this out!',
+  attachment: [photo.toString(), video.toString()].join(','),
+});
+```

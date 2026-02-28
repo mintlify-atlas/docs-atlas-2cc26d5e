@@ -1,0 +1,623 @@
+---
+title: Hear Manager
+description: Pattern matching for bot commands and message handlers
+icon: ear-listen
+---
+
+The `@vk-io/hear` package provides a simple and powerful way to handle bot commands using pattern matching. It allows you to register handlers that trigger when messages match specific patterns like text, regular expressions, or custom conditions.
+
+## Installation
+
+<CodeGroup>
+```bash npm
+npm install @vk-io/hear
+```
+
+```bash yarn
+yarn add @vk-io/hear
+```
+
+```bash pnpm
+pnpm add @vk-io/hear
+```
+</CodeGroup>
+
+<Note>
+  Node.js 12.20.0 or newer is required.
+</Note>
+
+## Quick Start
+
+Create command handlers using pattern matching:
+
+```typescript
+import { VK } from 'vk-io';
+import { HearManager } from '@vk-io/hear';
+
+const vk = new VK({ token: process.env.TOKEN });
+
+const hearManager = new HearManager();
+
+vk.updates.on('message_new', hearManager.middleware);
+
+// Exact text match
+hearManager.hear('/start', async (context) => {
+  await context.send('Welcome! Type /help for commands.');
+});
+
+// Regular expression
+hearManager.hear(/^hello$/i, async (context) => {
+  await context.send('Hello! 👋');
+});
+
+// Multiple patterns
+hearManager.hear(['/help', '/commands'], async (context) => {
+  await context.send(
+    'Available commands:\n' +
+    '/start - Start bot\n' +
+    '/help - Show this message'
+  );
+});
+
+vk.updates.start();
+```
+
+## Pattern Types
+
+The hear manager supports multiple pattern types:
+
+### String Patterns
+
+Match exact text:
+
+```typescript
+// Case-sensitive exact match
+hearManager.hear('/start', async (context) => {
+  await context.send('Started!');
+});
+
+// Matches only exactly "/start"
+```
+
+### Regular Expressions
+
+Match patterns with regex:
+
+```typescript
+// Case-insensitive greeting
+hearManager.hear(/^(hi|hello|hey)$/i, async (context) => {
+  await context.send('Hi there!');
+});
+
+// Extract data from message
+hearManager.hear(/^add (\w+)$/, async (context) => {
+  const item = context.$match?.[1];
+  await context.send(`Added: ${item}`);
+});
+
+// Match commands with arguments
+hearManager.hear(/^\/setname (.+)$/, async (context) => {
+  const name = context.$match?.[1];
+  context.session.name = name;
+  await context.send(`Name set to: ${name}`);
+});
+```
+
+<Note>
+  When a regex pattern matches, the match result is available in `context.$match`.
+</Note>
+
+### Multiple Patterns
+
+Match any of several patterns:
+
+```typescript
+// Match multiple commands
+hearManager.hear(['/help', '/commands', '/?'], async (context) => {
+  await context.send('Help message');
+});
+
+// Mix patterns
+hearManager.hear(['/start', /^begin$/i], async (context) => {
+  await context.send('Let\'s start!');
+});
+```
+
+### Function Conditions
+
+Use custom logic to match messages:
+
+```typescript
+// Custom condition
+hearManager.hear(
+  (text, context) => {
+    return text?.includes('order') && context.senderId === 12345;
+  },
+  async (context) => {
+    await context.send('Processing your order...');
+  }
+);
+
+// Check context properties
+hearManager.hear(
+  (text, context) => context.isChat && text === '/admin',
+  async (context) => {
+    await context.send('Admin panel opened');
+  }
+);
+```
+
+### Object Conditions
+
+Match against context properties:
+
+```typescript
+// Match by context properties
+hearManager.hear(
+  {
+    text: '/start',
+    senderId: 12345
+  },
+  async (context) => {
+    await context.send('Hello, specific user!');
+  }
+);
+
+// Complex object matching
+hearManager.hear(
+  {
+    'payload.command': 'subscribe',
+    'senderId': (id) => id > 1000
+  },
+  async (context) => {
+    await context.send('Subscribed!');
+  }
+);
+```
+
+## TypeScript Support
+
+Type-safe hear manager:
+
+```typescript
+import { MessageContext } from 'vk-io';
+import { HearManager } from '@vk-io/hear';
+
+interface CustomContext extends MessageContext {
+  session: {
+    counter: number;
+  };
+}
+
+const hearManager = new HearManager<CustomContext>();
+
+hearManager.hear('/count', async (context) => {
+  // TypeScript knows about session.counter
+  context.session.counter = (context.session.counter || 0) + 1;
+  await context.send(`Count: ${context.session.counter}`);
+});
+```
+
+## Fallback Handler
+
+Handle messages that don't match any patterns:
+
+```typescript
+hearManager.hear('/start', async (context) => {
+  await context.send('Started');
+});
+
+hearManager.hear('/help', async (context) => {
+  await context.send('Help');
+});
+
+// Fallback for unmatched messages
+hearManager.onFallback(async (context) => {
+  await context.send(
+    'Unknown command. Type /help for available commands.'
+  );
+});
+```
+
+## Extracting Match Data
+
+Access regex capture groups:
+
+```typescript
+// Extract command arguments
+hearManager.hear(/^\/give (\w+) (\d+)$/, async (context) => {
+  const [, item, amount] = context.$match!;
+  
+  await context.send(
+    `Giving ${amount}x ${item}`
+  );
+});
+
+// Named groups (ES2018+)
+hearManager.hear(
+  /^\/remind (?<time>\d+) (?<unit>\w+) (?<message>.+)$/,
+  async (context) => {
+    const { time, unit, message } = context.$match!.groups!;
+    
+    await context.send(
+      `Reminder set: ${time} ${unit} - "${message}"`
+    );
+  }
+);
+```
+
+## Common Patterns
+
+### Command Router
+
+```typescript
+import { HearManager } from '@vk-io/hear';
+
+const hearManager = new HearManager();
+
+// Bot commands
+hearManager.hear('/start', async (context) => {
+  await context.send(
+    'Welcome! I\'m a bot that can:\n' +
+    '- /weather - Get weather\n' +
+    '- /joke - Get a joke\n' +
+    '- /help - Show help'
+  );
+});
+
+hearManager.hear('/weather', async (context) => {
+  const weather = await getWeather();
+  await context.send(`Weather: ${weather}`);
+});
+
+hearManager.hear('/joke', async (context) => {
+  const joke = await getRandomJoke();
+  await context.send(joke);
+});
+
+hearManager.hear('/help', async (context) => {
+  await context.send('Help: Type /start to see commands');
+});
+
+hearManager.onFallback(async (context) => {
+  await context.send('Unknown command. Type /help');
+});
+```
+
+### Natural Language Responses
+
+```typescript
+// Greetings
+hearManager.hear(
+  /^(hi|hello|hey|sup|yo)$/i,
+  async (context) => {
+    const greetings = ['Hello!', 'Hi there!', 'Hey!', 'Yo!'];
+    const greeting = greetings[Math.floor(Math.random() * greetings.length)];
+    await context.send(greeting);
+  }
+);
+
+// Farewells
+hearManager.hear(
+  /^(bye|goodbye|see you|cya)$/i,
+  async (context) => {
+    await context.send('Goodbye! 👋');
+  }
+);
+
+// Thanks
+hearManager.hear(
+  /^(thanks|thank you|thx)$/i,
+  async (context) => {
+    await context.send('You\'re welcome! 😊');
+  }
+);
+```
+
+### Admin Commands
+
+```typescript
+const ADMIN_IDS = [123456, 789012];
+
+hearManager.hear(
+  (text, context) => {
+    return text?.startsWith('/admin') && ADMIN_IDS.includes(context.senderId);
+  },
+  async (context) => {
+    await context.send('Admin panel opened');
+  }
+);
+
+hearManager.hear(
+  (text, context) => {
+    return text?.startsWith('/ban') && ADMIN_IDS.includes(context.senderId);
+  },
+  async (context) => {
+    const userId = context.text?.split(' ')[1];
+    await banUser(userId);
+    await context.send(`User ${userId} banned`);
+  }
+);
+```
+
+### Interactive Menus
+
+```typescript
+import { Keyboard } from 'vk-io';
+
+hearManager.hear('/menu', async (context) => {
+  await context.send({
+    message: 'Choose an option:',
+    keyboard: Keyboard.builder()
+      .textButton({ label: '📊 Stats', color: 'primary' })
+      .textButton({ label: '⚙️ Settings', color: 'secondary' })
+      .row()
+      .textButton({ label: '❌ Close', color: 'negative' })
+  });
+});
+
+hearManager.hear('📊 Stats', async (context) => {
+  await context.send('Your stats: ...');
+});
+
+hearManager.hear('⚙️ Settings', async (context) => {
+  await context.send('Settings: ...');
+});
+
+hearManager.hear('❌ Close', async (context) => {
+  await context.send({
+    message: 'Menu closed',
+    keyboard: Keyboard.builder().inline()
+  });
+});
+```
+
+### Parameter Extraction
+
+```typescript
+// Set user name
+hearManager.hear(/^\/setname (.+)$/, async (context) => {
+  const name = context.$match![1];
+  context.session.name = name;
+  await context.send(`Name set to: ${name}`);
+});
+
+// Calculate
+hearManager.hear(/^calc (\d+) ([+\-*/]) (\d+)$/, async (context) => {
+  const [, a, op, b] = context.$match!;
+  const num1 = Number(a);
+  const num2 = Number(b);
+  
+  let result: number;
+  switch (op) {
+    case '+': result = num1 + num2; break;
+    case '-': result = num1 - num2; break;
+    case '*': result = num1 * num2; break;
+    case '/': result = num1 / num2; break;
+    default: return;
+  }
+  
+  await context.send(`Result: ${result}`);
+});
+
+// Set reminder
+hearManager.hear(
+  /^\/remind (\d+)(m|h|d) (.+)$/,
+  async (context) => {
+    const [, time, unit, message] = context.$match!;
+    
+    const duration = {
+      'm': Number(time) * 60 * 1000,
+      'h': Number(time) * 60 * 60 * 1000,
+      'd': Number(time) * 24 * 60 * 60 * 1000
+    }[unit];
+    
+    setTimeout(async () => {
+      await context.send(`⏰ Reminder: ${message}`);
+    }, duration);
+    
+    await context.send(`Reminder set for ${time}${unit} from now`);
+  }
+);
+```
+
+## Advanced Usage
+
+### Chaining Conditions
+
+```typescript
+// Multiple conditions must all match
+hearManager.hear(
+  [
+    (text) => text?.includes('password'),
+    (text, context) => !context.isChat,
+    (text, context) => context.senderId > 1000
+  ],
+  async (context) => {
+    await context.send('Password reset instructions sent');
+  }
+);
+```
+
+### Context-Based Routing
+
+```typescript
+// Different behavior for chats vs. DMs
+hearManager.hear(
+  '/info',
+  async (context) => {
+    if (context.isChat) {
+      await context.send('Chat info: ...');
+    } else {
+      await context.send('Your info: ...');
+    }
+  }
+);
+```
+
+### Priority Handling
+
+Handlers are checked in registration order:
+
+```typescript
+// This runs first
+hearManager.hear(/^\/.+/, async (context) => {
+  console.log('Command detected');
+});
+
+// This runs if the first doesn't match
+hearManager.hear(/.*/, async (context) => {
+  console.log('Any message');
+});
+```
+
+## Complete Example
+
+A full bot with hear manager:
+
+```typescript
+import { VK, Keyboard } from 'vk-io';
+import { SessionManager } from '@vk-io/session';
+import { HearManager } from '@vk-io/hear';
+
+const vk = new VK({ token: process.env.TOKEN });
+const sessionManager = new SessionManager();
+const hearManager = new HearManager();
+
+vk.updates.on('message_new', sessionManager.middleware);
+vk.updates.on('message_new', hearManager.middleware);
+
+// Start command
+hearManager.hear(['/start', 'начать'], async (context) => {
+  await context.send({
+    message:
+      '👋 Welcome!\n\n' +
+      'Available commands:\n' +
+      '/help - Show help\n' +
+      '/stats - Your statistics\n' +
+      '/settings - Bot settings',
+    keyboard: Keyboard.builder()
+      .textButton({ label: '📊 Stats' })
+      .textButton({ label: '⚙️ Settings' })
+      .row()
+      .textButton({ label: 'ℹ️ Help' })
+  });
+});
+
+// Help command
+hearManager.hear(['/help', 'помощь', 'ℹ️ Help'], async (context) => {
+  await context.send(
+    'ℹ️ Help:\n\n' +
+    'Commands:\n' +
+    '/start - Start bot\n' +
+    '/stats - View statistics\n' +
+    '/settings - Configure bot\n' +
+    '/reset - Reset your data'
+  );
+});
+
+// Stats command
+hearManager.hear(['/stats', '📊 Stats'], async (context) => {
+  if (!context.session.messageCount) {
+    context.session.messageCount = 0;
+  }
+  
+  context.session.messageCount++;
+  
+  await context.send(
+    '📊 Your Statistics:\n\n' +
+    `Messages sent: ${context.session.messageCount}\n` +
+    `Member since: ${context.session.joinDate || 'Today'}`
+  );
+});
+
+// Settings command
+hearManager.hear(['/settings', '⚙️ Settings'], async (context) => {
+  await context.send({
+    message: '⚙️ Settings:\n\nChoose an option:',
+    keyboard: Keyboard.builder()
+      .textButton({ label: '🔔 Notifications' })
+      .textButton({ label: '🌐 Language' })
+      .row()
+      .textButton({ label: '« Back', color: 'secondary' })
+  });
+});
+
+// Greetings
+hearManager.hear(
+  /^(hi|hello|hey|привет)$/i,
+  async (context) => {
+    await context.send(`Hello, @id${context.senderId}!`);
+  }
+);
+
+// Calculator
+hearManager.hear(
+  /^calc (\d+) ([+\-*/]) (\d+)$/,
+  async (context) => {
+    const [, a, op, b] = context.$match!;
+    const num1 = parseFloat(a);
+    const num2 = parseFloat(b);
+    
+    const operations = {
+      '+': (a: number, b: number) => a + b,
+      '-': (a: number, b: number) => a - b,
+      '*': (a: number, b: number) => a * b,
+      '/': (a: number, b: number) => a / b
+    };
+    
+    const result = operations[op](num1, num2);
+    await context.send(`🔢 Result: ${result}`);
+  }
+);
+
+// Fallback
+hearManager.onFallback(async (context) => {
+  await context.send(
+    'Sorry, I didn\'t understand that.\n' +
+    'Type /help to see available commands.'
+  );
+});
+
+vk.updates.start().catch(console.error);
+```
+
+## Best Practices
+
+<CardGroup cols={2}>
+  <Card title="Order Matters" icon="list-ol">
+    Register more specific patterns before general ones
+    
+    ```typescript
+    // Specific first
+    hearManager.hear('/admin', handler1);
+    // General later
+    hearManager.hear(/\/.+/, handler2);
+    ```
+  </Card>
+  
+  <Card title="Use Regex Wisely" icon="wand-magic-sparkles">
+    Regex is powerful but can be slow. Use simple strings when possible
+  </Card>
+  
+  <Card title="Always Have Fallback" icon="life-ring">
+    Provide a fallback handler for unmatched messages
+    
+    ```typescript
+    hearManager.onFallback(handler);
+    ```
+  </Card>
+  
+  <Card title="Validate Input" icon="shield-check">
+    Always validate and sanitize extracted data
+    
+    ```typescript
+    const id = Number(context.$match![1]);
+    if (isNaN(id)) return;
+    ```
+  </Card>
+</CardGroup>
+
+<Note>
+  For complex conversational flows, consider using [@vk-io/scenes](/ecosystem/scenes) instead of hear manager.
+</Note>

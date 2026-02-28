@@ -1,0 +1,988 @@
+---
+title: 'Upload'
+description: 'Upload files to VK (photos, videos, documents, audio)'
+icon: 'cloud-arrow-up'
+---
+
+The `Upload` class provides methods for uploading various types of files to VK including photos, videos, documents, audio files, and more.
+
+## Constructor
+
+```typescript
+import { Upload } from 'vk-io';
+
+const upload = new Upload({
+  api: vk.api
+});
+```
+
+<Note>
+Typically, you don't need to instantiate Upload directly. Use `vk.upload` from the VK instance instead.
+</Note>
+
+### Parameters
+
+<ParamField path="options" type="IUploadOptions" required>
+  Configuration options for the Upload instance.
+  
+  <Expandable title="IUploadOptions Properties">
+    <ParamField path="api" type="API" required>
+      API instance for making VK API calls.
+    </ParamField>
+    
+    <ParamField path="agent" type="Agent">
+      Custom HTTPS agent for upload requests.
+    </ParamField>
+    
+    <ParamField path="uploadTimeout" type="number" default={20000}>
+      Timeout in milliseconds for upload operations.
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+## Photo Upload Methods
+
+### photoAlbum()
+
+Uploads photos to a VK album.
+
+```typescript
+const photos = await vk.upload.photoAlbum({
+  album_id: 123,
+  source: {
+    value: 'path/to/photo.jpg'
+  }
+});
+```
+
+<ParamField path="params" type="IUploadParams" required>
+  <Expandable title="Parameters">
+    <ParamField path="source" type="UploadSource" required>
+      Photo file source (path, URL, Buffer, or Stream).
+    </ParamField>
+    
+    <ParamField path="album_id" type="number" required>
+      Album ID to upload to.
+    </ParamField>
+    
+    <ParamField path="group_id" type="number">
+      Community ID (if uploading to community album).
+    </ParamField>
+    
+    <ParamField path="caption" type="string">
+      Photo caption/description.
+    </ParamField>
+    
+    <ParamField path="latitude" type="number">
+      Geographical latitude.
+    </ParamField>
+    
+    <ParamField path="longitude" type="number">
+      Geographical longitude.
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+<ResponseField name="returns" type="Promise<PhotoAttachment[]>">
+  Array of uploaded photo attachments (max 5 photos).
+</ResponseField>
+
+### wallPhoto()
+
+Uploads a photo to be posted on a wall.
+
+```typescript
+const photo = await vk.upload.wallPhoto({
+  source: {
+    value: 'path/to/photo.jpg'
+  }
+});
+```
+
+<ParamField path="params" type="IUploadParams" required>
+  <Expandable title="Parameters">
+    <ParamField path="source" type="UploadSource" required>
+      Photo file source.
+    </ParamField>
+    
+    <ParamField path="user_id" type="number">
+      User ID for wall.
+    </ParamField>
+    
+    <ParamField path="group_id" type="number">
+      Community ID for wall.
+    </ParamField>
+    
+    <ParamField path="caption" type="string">
+      Photo caption.
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+<ResponseField name="returns" type="Promise<PhotoAttachment>">
+  Uploaded photo attachment.
+</ResponseField>
+
+### messagePhoto()
+
+Uploads a photo to be sent in a message.
+
+```typescript
+const photo = await vk.upload.messagePhoto({
+  peer_id: 123,
+  source: {
+    value: 'path/to/photo.jpg'
+  }
+});
+
+await vk.api.messages.send({
+  peer_id: 123,
+  attachment: photo,
+  random_id: 0
+});
+```
+
+<ParamField path="params" type="IUploadParams" required>
+  <Expandable title="Parameters">
+    <ParamField path="source" type="UploadSource" required>
+      Photo file source.
+    </ParamField>
+    
+    <ParamField path="peer_id" type="number">
+      Peer ID for the conversation.
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+<ResponseField name="returns" type="Promise<PhotoAttachment>">
+  Uploaded photo attachment ready to send in messages.
+</ResponseField>
+
+### ownerPhoto()
+
+Uploads a profile or community cover photo.
+
+```typescript
+const result = await vk.upload.ownerPhoto({
+  owner_id: -123, // Negative for community
+  source: {
+    value: 'path/to/photo.jpg'
+  }
+});
+```
+
+<ParamField path="params" type="IUploadParams" required>
+  <Expandable title="Parameters">
+    <ParamField path="source" type="UploadSource" required>
+      Photo file source.
+    </ParamField>
+    
+    <ParamField path="owner_id" type="number">
+      Owner ID (negative for community).
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+<ResponseField name="returns" type="Promise<object>">
+  Upload result with photo URLs and hash.
+  
+  <Expandable title="Response Object">
+    <ResponseField name="photo_hash" type="string">
+      Photo hash identifier.
+    </ResponseField>
+    
+    <ResponseField name="photo_src" type="string">
+      URL to the uploaded photo.
+    </ResponseField>
+    
+    <ResponseField name="photo_src_big" type="string">
+      URL to the big version.
+    </ResponseField>
+    
+    <ResponseField name="photo_src_small" type="string">
+      URL to the small version.
+    </ResponseField>
+    
+    <ResponseField name="saved" type="number">
+      1 if saved successfully.
+    </ResponseField>
+    
+    <ResponseField name="post_id" type="number">
+      Post ID if posted to wall.
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+### chatPhoto()
+
+Uploads a chat conversation photo.
+
+```typescript
+const result = await vk.upload.chatPhoto({
+  chat_id: 1,
+  source: {
+    value: 'path/to/photo.jpg'
+  }
+});
+```
+
+<ParamField path="params" type="IUploadParams" required>
+  <Expandable title="Parameters">
+    <ParamField path="source" type="UploadSource" required>
+      Photo file source.
+    </ParamField>
+    
+    <ParamField path="chat_id" type="number" required>
+      Chat ID.
+    </ParamField>
+    
+    <ParamField path="crop_x" type="number">
+      Crop X coordinate.
+    </ParamField>
+    
+    <ParamField path="crop_y" type="number">
+      Crop Y coordinate.
+    </ParamField>
+    
+    <ParamField path="crop_width" type="number">
+      Crop width.
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+<ResponseField name="returns" type="Promise<object>">
+  Result with message_id and chat information.
+</ResponseField>
+
+### marketPhoto()
+
+Uploads a photo for a market product.
+
+```typescript
+const photo = await vk.upload.marketPhoto({
+  group_id: 123,
+  source: {
+    value: 'path/to/product.jpg'
+  }
+});
+```
+
+<ParamField path="params" type="IUploadParams" required>
+  <Expandable title="Parameters">
+    <ParamField path="source" type="UploadSource" required>
+      Photo file source.
+    </ParamField>
+    
+    <ParamField path="group_id" type="number" required>
+      Community ID.
+    </ParamField>
+    
+    <ParamField path="main_photo" type="number">
+      1 if this is the main photo.
+    </ParamField>
+    
+    <ParamField path="crop_x" type="number">
+      Crop X coordinate.
+    </ParamField>
+    
+    <ParamField path="crop_y" type="number">
+      Crop Y coordinate.
+    </ParamField>
+    
+    <ParamField path="crop_width" type="number">
+      Crop width.
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+<ResponseField name="returns" type="Promise<PhotoAttachment>">
+  Uploaded market photo attachment.
+</ResponseField>
+
+### marketAlbumPhoto()
+
+Uploads a photo for a market collection.
+
+```typescript
+const photo = await vk.upload.marketAlbumPhoto({
+  group_id: 123,
+  source: {
+    value: 'path/to/album-cover.jpg'
+  }
+});
+```
+
+<ParamField path="params" type="IUploadParams" required>
+  <Expandable title="Parameters">
+    <ParamField path="source" type="UploadSource" required>
+      Photo file source.
+    </ParamField>
+    
+    <ParamField path="group_id" type="number" required>
+      Community ID.
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+<ResponseField name="returns" type="Promise<PhotoAttachment>">
+  Uploaded album photo attachment.
+</ResponseField>
+
+### groupCover()
+
+Uploads a community cover photo.
+
+```typescript
+const cover = await vk.upload.groupCover({
+  group_id: 123,
+  source: {
+    value: 'path/to/cover.jpg'
+  }
+});
+```
+
+<ParamField path="params" type="IUploadParams" required>
+  <Expandable title="Parameters">
+    <ParamField path="source" type="UploadSource" required>
+      Cover photo source.
+    </ParamField>
+    
+    <ParamField path="group_id" type="number" required>
+      Community ID.
+    </ParamField>
+    
+    <ParamField path="crop_x" type="number">
+      Left crop coordinate.
+    </ParamField>
+    
+    <ParamField path="crop_y" type="number">
+      Top crop coordinate.
+    </ParamField>
+    
+    <ParamField path="crop_x2" type="number">
+      Right crop coordinate.
+    </ParamField>
+    
+    <ParamField path="crop_y2" type="number">
+      Bottom crop coordinate.
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+<ResponseField name="returns" type="Promise<object>">
+  Object with array of cover images in different sizes.
+</ResponseField>
+
+## Video Upload Methods
+
+### video()
+
+Uploads a video file.
+
+```typescript
+const video = await vk.upload.video({
+  name: 'My Video',
+  description: 'Video description',
+  source: {
+    value: 'path/to/video.mp4'
+  }
+});
+```
+
+<ParamField path="params" type="IUploadParams" required>
+  <Expandable title="Parameters">
+    <ParamField path="source" type="UploadSource" required>
+      Video file source.
+    </ParamField>
+    
+    <ParamField path="name" type="string">
+      Video name.
+    </ParamField>
+    
+    <ParamField path="description" type="string">
+      Video description.
+    </ParamField>
+    
+    <ParamField path="album_id" type="number">
+      Album ID to save to.
+    </ParamField>
+    
+    <ParamField path="group_id" type="number">
+      Community ID.
+    </ParamField>
+    
+    <ParamField path="link" type="string">
+      External video URL (YouTube, Vimeo, etc.).
+    </ParamField>
+    
+    <ParamField path="is_private" type="number">
+      1 for private video.
+    </ParamField>
+    
+    <ParamField path="wallpost" type="number">
+      1 to publish on wall after upload.
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+<ResponseField name="returns" type="Promise<VideoAttachment>">
+  Uploaded video attachment.
+</ResponseField>
+
+## Document Upload Methods
+
+### document()
+
+Uploads a document file.
+
+```typescript
+const doc = await vk.upload.document({
+  title: 'Document.pdf',
+  source: {
+    value: 'path/to/document.pdf'
+  }
+});
+```
+
+<ParamField path="params" type="IUploadParams" required>
+  <Expandable title="Parameters">
+    <ParamField path="source" type="UploadSource" required>
+      Document file source.
+    </ParamField>
+    
+    <ParamField path="group_id" type="number">
+      Community ID.
+    </ParamField>
+    
+    <ParamField path="title" type="string">
+      Document title.
+    </ParamField>
+    
+    <ParamField path="tags" type="string">
+      Document tags.
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+<ResponseField name="returns" type="Promise<DocumentAttachment>">
+  Uploaded document attachment.
+</ResponseField>
+
+### wallDocument()
+
+Uploads a document for a wall post.
+
+```typescript
+const doc = await vk.upload.wallDocument({
+  source: {
+    value: 'path/to/file.pdf'
+  }
+});
+```
+
+<ParamField path="params" type="IUploadParams" required>
+  Same parameters as `document()` method.
+</ParamField>
+
+<ResponseField name="returns" type="Promise<DocumentAttachment>">
+  Uploaded document attachment.
+</ResponseField>
+
+### messageDocument()
+
+Uploads a document for a message.
+
+```typescript
+const doc = await vk.upload.messageDocument({
+  peer_id: 123,
+  source: {
+    value: 'path/to/file.zip'
+  }
+});
+
+await vk.api.messages.send({
+  peer_id: 123,
+  attachment: doc,
+  random_id: 0
+});
+```
+
+<ParamField path="params" type="IUploadParams" required>
+  <Expandable title="Parameters">
+    <ParamField path="source" type="UploadSource" required>
+      Document file source.
+    </ParamField>
+    
+    <ParamField path="peer_id" type="number">
+      Peer ID.
+    </ParamField>
+    
+    <ParamField path="title" type="string">
+      Document title.
+    </ParamField>
+    
+    <ParamField path="tags" type="string">
+      Document tags.
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+<ResponseField name="returns" type="Promise<DocumentAttachment>">
+  Uploaded document attachment.
+</ResponseField>
+
+## Audio Upload Methods
+
+### audio()
+
+Uploads an audio file.
+
+```typescript
+const audio = await vk.upload.audio({
+  title: 'Song Title',
+  artist: 'Artist Name',
+  source: {
+    value: 'path/to/song.mp3'
+  }
+});
+```
+
+<ParamField path="params" type="IUploadParams" required>
+  <Expandable title="Parameters">
+    <ParamField path="source" type="UploadSource" required>
+      Audio file source.
+    </ParamField>
+    
+    <ParamField path="title" type="string">
+      Song title.
+    </ParamField>
+    
+    <ParamField path="artist" type="string">
+      Artist name.
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+<ResponseField name="returns" type="Promise<AudioAttachment>">
+  Uploaded audio attachment.
+</ResponseField>
+
+### audioMessage()
+
+Uploads a voice message.
+
+```typescript
+const voiceMessage = await vk.upload.audioMessage({
+  peer_id: 123,
+  source: {
+    value: 'path/to/voice.ogg'
+  }
+});
+
+await vk.api.messages.send({
+  peer_id: 123,
+  attachment: voiceMessage,
+  random_id: 0
+});
+```
+
+<ParamField path="params" type="IUploadParams" required>
+  <Expandable title="Parameters">
+    <ParamField path="source" type="UploadSource" required>
+      Audio file source (OGG format recommended).
+    </ParamField>
+    
+    <ParamField path="peer_id" type="number">
+      Peer ID.
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+<ResponseField name="returns" type="Promise<AudioMessageAttachment>">
+  Uploaded voice message attachment.
+</ResponseField>
+
+## Stories Upload Methods
+
+### storiesPhoto()
+
+Uploads a photo story.
+
+```typescript
+const story = await vk.upload.storiesPhoto({
+  link_text: 'learn_more',
+  link_url: 'https://example.com',
+  source: {
+    value: 'path/to/story.jpg'
+  }
+});
+```
+
+<ParamField path="params" type="IUploadParams" required>
+  <Expandable title="Parameters">
+    <ParamField path="source" type="UploadSource" required>
+      Photo file source.
+    </ParamField>
+    
+    <ParamField path="link_text" type="string" required>
+      Link button text.
+    </ParamField>
+    
+    <ParamField path="link_url" type="string" required>
+      Link URL.
+    </ParamField>
+    
+    <ParamField path="group_id" type="number">
+      Community ID (for community stories).
+    </ParamField>
+    
+    <ParamField path="add_to_news" type="number">
+      1 to add to news feed.
+    </ParamField>
+    
+    <ParamField path="user_ids" type="string[] | string">
+      User IDs who can view the story.
+    </ParamField>
+    
+    <ParamField path="reply_to_story" type="string">
+      Story ID to reply to.
+    </ParamField>
+    
+    <ParamField path="clickable_stickers" type="string">
+      JSON with clickable stickers.
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+<ResponseField name="returns" type="Promise<StoryAttachment>">
+  Uploaded story attachment.
+</ResponseField>
+
+### storiesVideo()
+
+Uploads a video story.
+
+```typescript
+const story = await vk.upload.storiesVideo({
+  link_text: 'learn_more',
+  link_url: 'https://example.com',
+  source: {
+    value: 'path/to/story.mp4'
+  }
+});
+```
+
+<ParamField path="params" type="IUploadParams" required>
+  Same parameters as `storiesPhoto()` but for video files.
+</ParamField>
+
+<ResponseField name="returns" type="Promise<StoryAttachment>">
+  Uploaded video story attachment.
+</ResponseField>
+
+## Other Upload Methods
+
+### documentGraffiti()
+
+Uploads a graffiti image as a document.
+
+```typescript
+const graffiti = await vk.upload.documentGraffiti({
+  group_id: 123,
+  source: {
+    value: 'path/to/graffiti.png'
+  }
+});
+```
+
+<ResponseField name="returns" type="Promise<GraffitiAttachment>">
+  Uploaded graffiti attachment.
+</ResponseField>
+
+### messageGraffiti()
+
+Uploads a graffiti image for messages.
+
+```typescript
+const graffiti = await vk.upload.messageGraffiti({
+  peer_id: 123,
+  source: {
+    value: 'path/to/graffiti.png'
+  }
+});
+```
+
+<ResponseField name="returns" type="Promise<GraffitiAttachment>">
+  Uploaded graffiti attachment for messages.
+</ResponseField>
+
+### pollPhoto()
+
+Uploads a photo for a poll.
+
+```typescript
+const photo = await vk.upload.pollPhoto({
+  owner_id: 123,
+  source: {
+    value: 'path/to/photo.jpg'
+  }
+});
+```
+
+<ResponseField name="returns" type="Promise<Record<string, any>>">
+  Uploaded poll photo data.
+</ResponseField>
+
+## Upload Sources
+
+All upload methods accept various source types:
+
+### File Path
+
+```typescript
+await vk.upload.messagePhoto({
+  peer_id: 123,
+  source: {
+    value: '/path/to/photo.jpg'
+  }
+});
+```
+
+### URL
+
+```typescript
+await vk.upload.messagePhoto({
+  peer_id: 123,
+  source: {
+    value: 'https://example.com/photo.jpg'
+  }
+});
+```
+
+### Buffer
+
+```typescript
+import fs from 'fs';
+
+const buffer = fs.readFileSync('photo.jpg');
+
+await vk.upload.messagePhoto({
+  peer_id: 123,
+  source: {
+    value: buffer
+  }
+});
+```
+
+### Stream
+
+```typescript
+import fs from 'fs';
+
+const stream = fs.createReadStream('photo.jpg');
+
+await vk.upload.messagePhoto({
+  peer_id: 123,
+  source: {
+    value: stream
+  }
+});
+```
+
+### Multiple Files
+
+```typescript
+// Upload up to 5 photos to album
+const photos = await vk.upload.photoAlbum({
+  album_id: 123,
+  source: {
+    values: [
+      { value: 'photo1.jpg' },
+      { value: 'photo2.jpg' },
+      { value: 'photo3.jpg' }
+    ]
+  }
+});
+```
+
+### Custom Metadata
+
+```typescript
+await vk.upload.messagePhoto({
+  peer_id: 123,
+  source: {
+    value: buffer,
+    filename: 'custom-name.jpg',
+    contentType: 'image/jpeg',
+    contentLength: buffer.length
+  }
+});
+```
+
+## Examples
+
+### Upload and Send Photo
+
+```typescript
+import { VK } from 'vk-io';
+
+const vk = new VK({ token: process.env.VK_TOKEN });
+
+const photo = await vk.upload.messagePhoto({
+  peer_id: 123,
+  source: {
+    value: 'path/to/photo.jpg'
+  }
+});
+
+await vk.api.messages.send({
+  peer_id: 123,
+  message: 'Check out this photo!',
+  attachment: photo,
+  random_id: 0
+});
+```
+
+### Upload Multiple Photos to Album
+
+```typescript
+const photos = await vk.upload.photoAlbum({
+  album_id: 123,
+  caption: 'My vacation photos',
+  source: {
+    values: [
+      { value: 'photo1.jpg' },
+      { value: 'photo2.jpg' },
+      { value: 'photo3.jpg' },
+      { value: 'photo4.jpg' },
+      { value: 'photo5.jpg' }
+    ]
+  }
+});
+
+console.log(`Uploaded ${photos.length} photos`);
+```
+
+### Upload from URL
+
+```typescript
+const photo = await vk.upload.wallPhoto({
+  source: {
+    value: 'https://picsum.photos/800/600'
+  },
+  caption: 'Random photo from URL'
+});
+
+await vk.api.wall.post({
+  owner_id: -123,
+  message: 'Check this out!',
+  attachments: photo.toString()
+});
+```
+
+### Upload and Send Document
+
+```typescript
+const doc = await vk.upload.messageDocument({
+  peer_id: 123,
+  title: 'Important Document.pdf',
+  source: {
+    value: 'path/to/document.pdf'
+  }
+});
+
+await vk.api.messages.send({
+  peer_id: 123,
+  message: 'Here is the document you requested',
+  attachment: doc,
+  random_id: 0
+});
+```
+
+### Upload Voice Message
+
+```typescript
+const voiceMessage = await vk.upload.audioMessage({
+  peer_id: 123,
+  source: {
+    value: 'path/to/recording.ogg'
+  }
+});
+
+await vk.api.messages.send({
+  peer_id: 123,
+  attachment: voiceMessage,
+  random_id: 0
+});
+```
+
+### Upload Video with Details
+
+```typescript
+const video = await vk.upload.video({
+  name: 'My Awesome Video',
+  description: 'This is a great video!',
+  is_private: 0,
+  wallpost: 1,
+  source: {
+    value: 'path/to/video.mp4'
+  }
+});
+
+console.log('Video uploaded:', video.toString());
+```
+
+### Error Handling
+
+```typescript
+import { VK, UploadError } from 'vk-io';
+
+const vk = new VK({ token: process.env.VK_TOKEN });
+
+try {
+  const photo = await vk.upload.messagePhoto({
+    peer_id: 123,
+    source: {
+      value: 'nonexistent.jpg'
+    }
+  });
+} catch (error) {
+  if (error instanceof UploadError) {
+    console.error(`Upload error: ${error.message}`);
+    console.error(`Error code: ${error.code}`);
+  }
+}
+```
+
+## Best Practices
+
+<Tip>
+**File Format Support**:
+- **Photos**: JPG, PNG, GIF (max 50MB)
+- **Videos**: MP4, AVI, MOV (max 6GB for regular users)
+- **Audio**: MP3, OGG (for voice messages)
+- **Documents**: Any format (max 200MB)
+</Tip>
+
+<Warning>
+**Upload Timeouts**: Large files may take time to upload. Increase `uploadTimeout` if needed:
+```typescript
+const vk = new VK({
+  token: process.env.VK_TOKEN,
+  uploadTimeout: 60000 // 60 seconds
+});
+```
+</Warning>
+
+<Note>
+**Attachment Strings**: Convert attachments to strings for API calls:
+```typescript
+const photo = await vk.upload.messagePhoto({ /* ... */ });
+
+// Use toString() or template literal
+await vk.api.messages.send({
+  attachment: photo.toString(), // or `${photo}`
+  // ...
+});
+```
+</Note>

@@ -1,0 +1,253 @@
+---
+title: 'VK'
+description: 'Main VK-IO class for initializing the library'
+icon: 'circle-nodes'
+---
+
+The `VK` class is the primary entry point for the VK-IO library. It initializes and provides access to all core services including API methods, file uploads, and update handling.
+
+## Constructor
+
+Creates a new VK instance with the specified configuration.
+
+```typescript
+import { VK } from 'vk-io';
+
+const vk = new VK({
+  token: 'your_access_token',
+  apiVersion: '5.199'
+});
+```
+
+### Parameters
+
+<ParamField path="options" type="Partial<VKOptions> & { token: string }" required>
+  Configuration options for the VK instance
+  
+  <Expandable title="VKOptions Properties">
+    <ParamField path="token" type="string" required>
+      VK API access token. You can obtain this from the VK API settings page.
+    </ParamField>
+    
+    <ParamField path="language" type="'ru' | 'uk' | 'be' | 'en' | 'es' | 'fi' | 'de' | 'it'">
+      The language for API responses. Defaults to English if not specified.
+    </ParamField>
+    
+    <ParamField path="agent" type="Agent">
+      Custom HTTPS agent for network requests. Uses Node.js global agent by default.
+    </ParamField>
+    
+    <ParamField path="apiMode" type="'sequential' | 'parallel' | 'parallel_selected'" default="sequential">
+      Determines how API requests are collected:
+      - `sequential` - Requests are sent one by one in order
+      - `parallel` - All requests are batched through execute method
+      - `parallel_selected` - Only specified methods (in `apiExecuteMethods`) are batched
+    </ParamField>
+    
+    <ParamField path="apiRequestMode" type="'sequential' | 'burst'" default="sequential">
+      Request sending strategy:
+      - `sequential` - Requests sent through an interval queue
+      - `burst` - Parallel requests (may cause network errors)
+    </ParamField>
+    
+    <ParamField path="apiWait" type="number" default={3000}>
+      Time in milliseconds to wait before re-querying after an error.
+    </ParamField>
+    
+    <ParamField path="apiLimit" type="number" default={3}>
+      Maximum number of requests per second. VK has rate limits that vary by token type.
+    </ParamField>
+    
+    <ParamField path="apiVersion" type="string" default="5.199">
+      VK API version to use. See [VK API Versions](https://dev.vk.ru/reference/versions) for available versions.
+    </ParamField>
+    
+    <ParamField path="apiBaseUrl" type="string" default="https://api.vk.ru/method">
+      Base URL for API requests. Change this only if you're using a proxy or custom endpoint.
+    </ParamField>
+    
+    <ParamField path="apiRetryLimit" type="number" default={3}>
+      Number of times to retry a failed request before throwing an error.
+    </ParamField>
+    
+    <ParamField path="apiTimeout" type="number" default={10000}>
+      Request timeout in milliseconds. Requests exceeding this will be aborted.
+    </ParamField>
+    
+    <ParamField path="apiHeaders" type="Record<string, string>">
+      Custom headers to include with every API request. Default includes User-Agent.
+    </ParamField>
+    
+    <ParamField path="apiExecuteCount" type="number" default={25}>
+      Maximum number of requests to batch in a single execute call (max 25 per VK limits).
+    </ParamField>
+    
+    <ParamField path="apiExecuteMethods" type="string[]" default={["messages.send"]}>
+      Methods to batch when `apiMode` is `parallel_selected`.
+    </ParamField>
+    
+    <ParamField path="apiExecuteUnsupportedMethods" type="string[]">
+      Methods that cannot be used with execute (mainly upload methods). Has sensible defaults.
+    </ParamField>
+    
+    <ParamField path="pollingWait" type="number" default={3000}>
+      Time to wait between polling requests when using Long Poll.
+    </ParamField>
+    
+    <ParamField path="pollingRetryLimit" type="number" default={3}>
+      Number of retries for failed polling requests.
+    </ParamField>
+    
+    <ParamField path="pollingGroupId" type="number">
+      Group ID for polling. If not specified, will be auto-detected from token.
+    </ParamField>
+    
+    <ParamField path="webhookSecret" type="string">
+      Secret key for validating webhook requests from VK.
+    </ParamField>
+    
+    <ParamField path="webhookConfirmation" type="string">
+      Confirmation string required when setting up webhooks in VK.
+    </ParamField>
+    
+    <ParamField path="uploadTimeout" type="number" default={20000}>
+      Timeout in milliseconds for file upload operations.
+    </ParamField>
+    
+    <ParamField path="callbackService" type="CallbackService">
+      Custom callback service for handling captcha and other interactive prompts.
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+## Properties
+
+<ResponseField name="api" type="API">
+  Instance of the API class for making VK API method calls. Provides access to all VK API methods.
+  
+  See [API Reference](/api-reference/api) for detailed documentation.
+</ResponseField>
+
+<ResponseField name="upload" type="Upload">
+  Instance of the Upload class for uploading files to VK (photos, videos, documents, etc.).
+  
+  See [Upload Reference](/api-reference/upload) for detailed documentation.
+</ResponseField>
+
+<ResponseField name="updates" type="Updates">
+  Instance of the Updates class for receiving and handling updates from VK (messages, wall posts, etc.).
+  
+  See [Updates Reference](/api-reference/updates) for detailed documentation.
+</ResponseField>
+
+<ResponseField name="callbackService" type="CallbackService">
+  Service for handling callbacks like captcha validation. Can be shared across multiple VK instances.
+</ResponseField>
+
+## Examples
+
+### Basic Initialization
+
+```typescript
+import { VK } from 'vk-io';
+
+const vk = new VK({
+  token: process.env.VK_TOKEN
+});
+
+// Make API calls
+const user = await vk.api.users.get({ user_ids: [1] });
+console.log(user);
+```
+
+### With Custom Configuration
+
+```typescript
+const vk = new VK({
+  token: process.env.VK_TOKEN,
+  apiVersion: '5.199',
+  language: 'en',
+  apiLimit: 3,
+  apiMode: 'sequential',
+  apiRetryLimit: 5
+});
+```
+
+### Using Parallel Mode for Performance
+
+```typescript
+const vk = new VK({
+  token: process.env.VK_TOKEN,
+  apiMode: 'parallel',
+  apiExecuteCount: 25
+});
+
+// Multiple requests will be automatically batched
+await Promise.all([
+  vk.api.users.get({ user_ids: [1] }),
+  vk.api.users.get({ user_ids: [2] }),
+  vk.api.users.get({ user_ids: [3] })
+]);
+```
+
+### With Webhook Configuration
+
+```typescript
+const vk = new VK({
+  token: process.env.VK_TOKEN,
+  webhookSecret: process.env.VK_WEBHOOK_SECRET,
+  webhookConfirmation: process.env.VK_WEBHOOK_CONFIRMATION
+});
+
+// Start receiving updates via webhook
+vk.updates.on('message_new', async (context) => {
+  await context.send('Hello!');
+});
+
+await vk.updates.startWebhook({
+  port: 8080,
+  path: '/webhook'
+});
+```
+
+### Multi-Instance Setup
+
+```typescript
+import { VK, CallbackService } from 'vk-io';
+
+// Shared callback service for multiple instances
+const callbackService = new CallbackService();
+
+const userVk = new VK({
+  token: process.env.VK_USER_TOKEN,
+  callbackService
+});
+
+const groupVk = new VK({
+  token: process.env.VK_GROUP_TOKEN,
+  callbackService
+});
+
+// Both instances share the same captcha handler
+callbackService.onCaptcha(async ({ src, send }) => {
+  const key = await solveCaptcha(src);
+  await send(key);
+});
+```
+
+## Best Practices
+
+<Tip>
+**Token Security**: Never hardcode tokens in your source code. Use environment variables or secure configuration management.
+</Tip>
+
+<Warning>
+**Rate Limits**: Respect VK's rate limits. User tokens typically allow 3 requests/second, while service tokens may allow more. Adjust `apiLimit` accordingly.
+</Warning>
+
+<Note>
+**API Mode Selection**:
+- Use `sequential` for simple bots and reliable request ordering
+- Use `parallel` for high-performance applications with many requests
+- Use `parallel_selected` to optimize specific methods while keeping others sequential
+</Note>

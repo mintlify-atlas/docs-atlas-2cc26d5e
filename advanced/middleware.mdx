@@ -1,0 +1,614 @@
+---
+title: Middleware
+description: Middleware-based event handling and request processing
+icon: layer-group
+---
+
+## Overview
+
+VK-IO uses a middleware-based architecture for handling events. Middleware functions form a chain where each function can process the context and pass control to the next middleware.
+
+## Basic Middleware Concept
+
+Middleware is a function that receives a context object and a `next` function:
+
+```typescript
+import { MessageContext } from 'vk-io';
+
+vk.updates.use(async (context: MessageContext, next) => {
+  // Code before next() runs first
+  console.log('Before next');
+  
+  // Pass control to next middleware
+  await next();
+  
+  // Code after next() runs after all subsequent middleware
+  console.log('After next');
+});
+```
+
+## Middleware Chain
+
+### Basic Chain
+
+```typescript
+vk.updates.use(async (context, next) => {
+  console.log('Middleware 1: start');
+  await next();
+  console.log('Middleware 1: end');
+});
+
+vk.updates.use(async (context, next) => {
+  console.log('Middleware 2: start');
+  await next();
+  console.log('Middleware 2: end');
+});
+
+vk.updates.use(async (context, next) => {
+  console.log('Middleware 3: start');
+  await next();
+  console.log('Middleware 3: end');
+});
+
+// Output:
+// Middleware 1: start
+// Middleware 2: start
+// Middleware 3: start
+// Middleware 3: end
+// Middleware 2: end
+// Middleware 1: end
+```
+
+### Stopping the Chain
+
+Not calling `next()` stops the middleware chain:
+
+```typescript
+vk.updates.use(async (context, next) => {
+  // This middleware stops the chain for bots
+  if (context.is('message') && context.senderType === 'user' && context.senderId < 0) {
+    console.log('Ignoring bot message');
+    return; // Don't call next()
+  }
+  
+  await next();
+});
+
+vk.updates.use(async (context) => {
+  // This will only run for non-bot messages
+  console.log('Processing message:', context.text);
+});
+```
+
+## Common Middleware Patterns
+
+### Logging Middleware
+
+```typescript
+vk.updates.use(async (context, next) => {
+  const start = Date.now();
+  
+  console.log(`[${context.type}] Event received`);
+  
+  await next();
+  
+  const duration = Date.now() - start;
+  console.log(`[${context.type}] Processed in ${duration}ms`);
+});
+```
+
+### Authentication Middleware
+
+```typescript
+const ADMIN_IDS = [1, 2, 3];
+
+vk.updates.use(async (context, next) => {
+  if (!context.is('message')) {
+    return next();
+  }
+  
+  // Add isAdmin property to context
+  context.isAdmin = ADMIN_IDS.includes(context.senderId);
+  
+  await next();
+});
+
+// Later in handlers
+vk.updates.hear(/admin command/i, async (context) => {
+  if (!context.isAdmin) {
+    return context.send('Access denied');
+  }
+  
+  // Admin logic
+});
+```
+
+### Context Modification
+
+Real example from VK-IO examples:
+
+```javascript
+const { VK } = require('vk-io');
+const { HearManager } = require('@vk-io/hear');
+
+const vk = new VK({ token: process.env.TOKEN });
+const hearManager = new HearManager();
+
+// Some users "database"
+const users = new Map([]);
+
+vk.updates.on('message_new', (context, next) => {
+  let user = users.get(context.senderId);
+  
+  if (!user) {
+    user = {
+      displayName: `User ${context.senderId}`,
+    };
+    users.set(context.senderId, user);
+  }
+  
+  // Add user to context
+  context.user = user;
+  
+  // Add custom method
+  context.answer = (text, params) => 
+    context.send(`${context.user.displayName}, ${text}`, params);
+  
+  return next();
+});
+
+vk.updates.on('message_new', hearManager.middleware);
+
+hearManager.hear(/hello/i, async context => {
+  await context.answer('hello!'); // Will send "User 1234, hello!"
+});
+
+hearManager.hear(/set username (.+)/i, async context => {
+  const [, displayName] = context.$match;
+  context.user.displayName = displayName;
+  await context.answer('display name changed.');
+});
+```
+
+### Rate Limiting
+
+```typescript
+const rateLimits = new Map<number, number>();
+const RATE_LIMIT = 5; // messages per minute
+
+vk.updates.use(async (context, next) => {
+  if (!context.is('message')) {
+    return next();
+  }
+  
+  const userId = context.senderId;
+  const now = Date.now();
+  const lastMessage = rateLimits.get(userId) || 0;
+  
+  if (now - lastMessage < 60000 / RATE_LIMIT) {
+    console.log(`Rate limit exceeded for user ${userId}`);
+    return; // Don't call next()
+  }
+  
+  rateLimits.set(userId, now);
+  await next();
+});
+```
+
+### Command Parser
+
+```typescript
+interface CommandContext extends MessageContext {
+  command?: string;
+  args?: string[];
+}
+
+vk.updates.use(async (context: CommandContext, next) => {
+  if (!context.is('message') || !context.text) {
+    return next();
+  }
+  
+  // Parse commands starting with /
+  if (context.text.startsWith('/')) {
+    const [command, ...args] = context.text.slice(1).split(' ');
+    context.command = command.toLowerCase();
+    context.args = args;
+  }
+  
+  await next();
+});
+
+// Use the parsed command
+vk.updates.use(async (context: CommandContext) => {
+  if (context.command === 'help') {
+    await context.send('Available commands: /help, /start, /info');
+  } else if (context.command === 'echo' && context.args) {
+    await context.send(context.args.join(' '));
+  }
+});
+```
+
+## Error Handling Middleware
+
+### Global Error Handler
+
+```typescript
+vk.updates.use(async (context, next) => {
+  try {
+    await next();
+  } catch (error) {
+    console.error('Error in middleware chain:', error);
+    
+    if (context.is('message')) {
+      await context.send('An error occurred. Please try again later.');
+    }
+  }
+});
+```
+
+### Specific Error Types
+
+Real example from VK-IO examples:
+
+```javascript
+const { VK, APIError } = require('vk-io');
+const { HearManager } = require('@vk-io/hear');
+
+const vk = new VK({ token: process.env.TOKEN });
+const hearManager = new HearManager();
+
+// Custom catch all errors
+vk.updates.use(async (context, next) => {
+  try {
+    await next();
+  } catch (error) {
+    console.error('An error has occurred', error);
+  }
+});
+
+class MyNetworkError extends Error {}
+
+// Custom error handling
+vk.updates.use(async (context, next) => {
+  try {
+    await next();
+  } catch (error) {
+    // Only handle message errors
+    if (!context.is('message')) {
+      throw error;
+    }
+    
+    // Handle specific API error (no chat access)
+    if (error instanceof APIError && error.code === 917) {
+      await context.send('I do not have access to the chat, please give it to me.');
+      return;
+    }
+    
+    // Handle custom network error
+    if (error instanceof MyNetworkError) {
+      await context.send('There was a problem with the connection.');
+      return;
+    }
+    
+    // Re-throw unknown errors
+    throw error;
+  }
+});
+
+vk.updates.on('message_new', hearManager.middleware);
+
+hearManager.hear(/get chat/i, async context => {
+  if (!context.isChat) {
+    return context.send('We are not in chat!');
+  }
+  
+  // This may throw error 917 if no access
+  const { items } = await vk.api.messages.getConversationsById({
+    peer_ids: context.peerId,
+  });
+  
+  const [conversation] = items;
+  return context.send(`Chat: ${JSON.stringify(conversation, null, '  ')}`);
+});
+
+hearManager.hear(/throw network error/i, async () => {
+  throw new MyNetworkError();
+});
+```
+
+### Error Recovery
+
+```typescript
+import { APIError, APIErrorCode } from 'vk-io';
+
+vk.updates.use(async (context, next) => {
+  try {
+    await next();
+  } catch (error) {
+    if (error instanceof APIError) {
+      switch (error.code) {
+        case APIErrorCode.TOO_MANY_REQUESTS:
+          console.log('Rate limit hit, waiting...');
+          await new Promise(resolve => setTimeout(resolve, 1000));
+          await next(); // Retry
+          break;
+          
+        case APIErrorCode.FLOOD_CONTROL:
+          console.log('Flood control triggered');
+          if (context.is('message')) {
+            await context.send('Please wait before sending more messages.');
+          }
+          break;
+          
+        default:
+          throw error; // Re-throw other API errors
+      }
+    } else {
+      throw error; // Re-throw non-API errors
+    }
+  }
+});
+```
+
+## Conditional Middleware
+
+### Type-Based Middleware
+
+```typescript
+// Only for messages
+vk.updates.on('message_new', async (context, next) => {
+  console.log('Message received:', context.text);
+  await next();
+});
+
+// Only for wall posts
+vk.updates.on('wall_post_new', async (context, next) => {
+  console.log('New post:', context.text);
+  await next();
+});
+
+// Multiple event types
+vk.updates.on(['message_new', 'message_edit'], async (context, next) => {
+  console.log('Message event:', context.type);
+  await next();
+});
+```
+
+### Custom Conditions
+
+```typescript
+function onlyChats(middleware) {
+  return async (context, next) => {
+    if (context.is('message') && context.isChat) {
+      return middleware(context, next);
+    }
+    await next();
+  };
+}
+
+function onlyAdmins(middleware) {
+  return async (context, next) => {
+    if (context.isAdmin) {
+      return middleware(context, next);
+    }
+    await next();
+  };
+}
+
+// Usage
+vk.updates.use(
+  onlyChats(
+    onlyAdmins(
+      async (context) => {
+        await context.send('Admin chat command executed');
+      }
+    )
+  )
+);
+```
+
+## Async Middleware
+
+### Database Operations
+
+```typescript
+interface UserContext extends MessageContext {
+  dbUser?: any;
+}
+
+vk.updates.use(async (context: UserContext, next) => {
+  if (!context.is('message')) {
+    return next();
+  }
+  
+  // Fetch user from database
+  context.dbUser = await database.users.findById(context.senderId);
+  
+  if (!context.dbUser) {
+    // Create new user
+    context.dbUser = await database.users.create({
+      id: context.senderId,
+      firstSeen: new Date(),
+    });
+  }
+  
+  await next();
+  
+  // Update user after processing
+  await database.users.update(context.senderId, {
+    lastSeen: new Date(),
+  });
+});
+```
+
+### External API Calls
+
+```typescript
+vk.updates.use(async (context, next) => {
+  if (!context.is('message')) {
+    return next();
+  }
+  
+  // Enrich context with external data
+  const userInfo = await fetch(
+    `https://api.example.com/users/${context.senderId}`
+  ).then(r => r.json());
+  
+  context.externalUserData = userInfo;
+  
+  await next();
+});
+```
+
+## Middleware Composition
+
+### Creating Middleware Factory
+
+```typescript
+function createLogger(prefix: string) {
+  return async (context, next) => {
+    console.log(`[${prefix}] Event:`, context.type);
+    await next();
+  };
+}
+
+vk.updates.use(createLogger('BOT'));
+```
+
+### Combining Middleware
+
+```typescript
+import { compose } from 'middleware-io';
+
+const authMiddleware = async (context, next) => {
+  context.isAuthenticated = true;
+  await next();
+};
+
+const loggingMiddleware = async (context, next) => {
+  console.log('Processing:', context.type);
+  await next();
+};
+
+const rateLimitMiddleware = async (context, next) => {
+  // Rate limiting logic
+  await next();
+};
+
+// Combine multiple middleware
+const combined = compose([
+  authMiddleware,
+  loggingMiddleware,
+  rateLimitMiddleware,
+]);
+
+vk.updates.use(combined);
+```
+
+## Using External Middleware
+
+### @vk-io/hear Integration
+
+```typescript
+import { HearManager } from '@vk-io/hear';
+
+const hearManager = new HearManager();
+
+// Use hear manager as middleware
+vk.updates.on('message_new', hearManager.middleware);
+
+// Define patterns
+hearManager.hear(/start/i, async (context) => {
+  await context.send('Bot started!');
+});
+
+hearManager.hear(/hello/i, async (context) => {
+  await context.send('Hello!');
+});
+```
+
+### @vk-io/session Integration
+
+```typescript
+import { SessionManager } from '@vk-io/session';
+
+const sessionManager = new SessionManager();
+
+// Use session manager as middleware
+vk.updates.on('message_new', sessionManager.middleware);
+
+vk.updates.hear(/counter/i, async (context) => {
+  const { session } = context;
+  
+  if (!session.counter) {
+    session.counter = 0;
+  }
+  
+  session.counter += 1;
+  
+  await context.send(`Counter: ${session.counter}`);
+});
+```
+
+## Best Practices
+
+<Note>
+1. **Order Matters**: Middleware executes in the order it's registered. Place error handlers early.
+2. **Always Call Next**: Unless you intentionally want to stop the chain, always call `await next()`.
+3. **Handle Errors**: Wrap middleware chains in try-catch blocks to prevent crashes.
+4. **Type Safety**: Extend context types when adding custom properties.
+5. **Keep It Simple**: Each middleware should have a single, clear purpose.
+</Note>
+
+### Middleware Ordering
+
+```typescript
+// 1. Error handler (first)
+vk.updates.use(errorHandler);
+
+// 2. Logging
+vk.updates.use(logger);
+
+// 3. Authentication
+vk.updates.use(auth);
+
+// 4. Rate limiting
+vk.updates.use(rateLimit);
+
+// 5. Business logic (last)
+vk.updates.use(handlers);
+```
+
+### Type-Safe Middleware
+
+```typescript
+import { Middleware } from 'middleware-io';
+import { MessageContext } from 'vk-io';
+
+interface CustomContext extends MessageContext {
+  user: {
+    id: number;
+    name: string;
+    role: string;
+  };
+}
+
+const middleware: Middleware<CustomContext> = async (context, next) => {
+  // TypeScript knows about context.user
+  console.log(context.user.name);
+  await next();
+};
+
+vk.updates.use(middleware);
+```
+
+<Warning>
+Be careful with infinite loops in middleware. Always ensure the chain can complete.
+</Warning>
+
+<Accordion title="Source Code Reference">
+Middleware system is implemented in:
+- `/packages/vk-io/src/updates/updates.ts:347` - `use()` method for adding middleware
+- VK-IO uses the `middleware-io` package for the underlying middleware composition
+- Examples: `/docs/examples/advanced/middleware-error-fallback.js` and `/docs/examples/advanced/context-modification.js`
+</Accordion>

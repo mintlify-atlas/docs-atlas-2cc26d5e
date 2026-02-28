@@ -1,0 +1,346 @@
+---
+title: 'Contributing to VK-IO'
+description: 'Guide for contributing to the VK-IO project'
+icon: 'code-pull-request'
+---
+
+Thank you for your interest in contributing to VK-IO! This guide will help you get started with contributing to the library.
+
+## Ways to Contribute
+
+<CardGroup cols={2}>
+  <Card title="Report Bugs" icon="bug">
+    Found an issue? Report it on GitHub Issues
+  </Card>
+  
+  <Card title="Suggest Features" icon="lightbulb">
+    Have an idea? Open a feature request
+  </Card>
+  
+  <Card title="Improve Docs" icon="book">
+    Help make documentation clearer and more comprehensive
+  </Card>
+  
+  <Card title="Submit Code" icon="code">
+    Fix bugs or implement new features
+  </Card>
+</CardGroup>
+
+## Getting Started
+
+### Prerequisites
+
+<Note>
+  VK-IO requires **Node.js 12.20.0 or higher**
+</Note>
+
+Before contributing, make sure you have:
+- Node.js 12.20.0 or higher installed
+- npm, yarn, or pnpm package manager
+- Git installed and configured
+- A GitHub account
+
+### Development Setup
+
+<Steps>
+  <Step title="Fork the repository">
+    Navigate to [negezor/vk-io](https://github.com/negezor/vk-io) and click the **Fork** button
+  </Step>
+  
+  <Step title="Clone your fork">
+    ```bash
+    git clone https://github.com/YOUR_USERNAME/vk-io.git
+    cd vk-io
+    ```
+  </Step>
+  
+  <Step title="Install dependencies">
+    ```bash
+    npm ci --ignore-scripts
+    ```
+  </Step>
+  
+  <Step title="Build the project">
+    ```bash
+    npm run build
+    ```
+  </Step>
+  
+  <Step title="Run tests">
+    ```bash
+    npm test
+    ```
+    
+    <Warning>
+      Some tests require a VK API token. Set the `TOKEN` environment variable:
+      ```bash
+      TOKEN=your_vk_token npm test
+      ```
+    </Warning>
+  </Step>
+</Steps>
+
+## Project Structure
+
+VK-IO is organized as a monorepo with multiple packages:
+
+```
+vk-io/
+├── packages/
+│   ├── vk-io/              # Core library
+│   ├── authorization/       # @vk-io/authorization
+│   ├── session/            # @vk-io/session
+│   ├── scenes/             # @vk-io/scenes
+│   ├── streaming/          # @vk-io/streaming
+│   ├── hear/               # @vk-io/hear
+│   └── stateless-prompt/   # @vk-io/stateless-prompt
+├── docs/                   # Documentation
+└── scripts/                # Build scripts
+```
+
+Each package in `packages/` has its own:
+- `src/` - TypeScript source code
+- `test/` - Test files
+- `lib/` - Compiled output (generated)
+- `package.json` - Package configuration
+
+## Development Workflow
+
+### Making Changes
+
+<Steps>
+  <Step title="Create a branch">
+    ```bash
+    git checkout -b feature/your-feature-name
+    ```
+    
+    Use descriptive branch names:
+    - `feature/` for new features
+    - `fix/` for bug fixes
+    - `docs/` for documentation changes
+  </Step>
+  
+  <Step title="Make your changes">
+    Edit the source files in the appropriate package's `src/` directory
+  </Step>
+  
+  <Step title="Build and test">
+    ```bash
+    # Build all packages
+    npm run build
+    
+    # Run tests
+    npm test
+    
+    # Run linter
+    npm run check
+    ```
+  </Step>
+  
+  <Step title="Watch mode (optional)">
+    For active development, use watch mode:
+    ```bash
+    npm run watch
+    ```
+  </Step>
+</Steps>
+
+### Code Style
+
+VK-IO uses [Biome](https://biomejs.dev/) for linting and formatting:
+
+```bash
+# Check code style
+npm run check
+
+# Format code
+npm run fmt
+
+# Fix issues automatically
+npm run fix
+```
+
+<Note>
+  All code must pass linting checks before being merged. The CI will automatically verify this.
+</Note>
+
+### Writing Tests
+
+Tests are written using Node.js built-in test runner:
+
+```typescript
+import { describe, it } from 'node:test';
+import assert from 'node:assert';
+
+describe('MyFeature', () => {
+    it('should work correctly', () => {
+        // Your test code
+        assert.strictEqual(1 + 1, 2);
+    });
+});
+```
+
+Place test files in the `test/` directory of the relevant package with a `.test.ts` extension.
+
+## Submitting Changes
+
+### Commit Guidelines
+
+Write clear, descriptive commit messages:
+
+```bash
+# Good commit messages
+git commit -m "fix: resolve issue with message context forwarding"
+git commit -m "feat: add support for mini apps attachments"
+git commit -m "docs: improve upload examples"
+
+# Less helpful commit messages (avoid)
+git commit -m "fix bug"
+git commit -m "update code"
+git commit -m "changes"
+```
+
+### Creating a Pull Request
+
+<Steps>
+  <Step title="Push your branch">
+    ```bash
+    git push origin feature/your-feature-name
+    ```
+  </Step>
+  
+  <Step title="Open a pull request">
+    Go to the [VK-IO repository](https://github.com/negezor/vk-io) and click **New Pull Request**
+  </Step>
+  
+  <Step title="Fill in the details">
+    Provide:
+    - **Clear title** describing the change
+    - **Description** explaining what and why
+    - **Related issues** if applicable (e.g., "Fixes #123")
+    - **Breaking changes** if any
+  </Step>
+  
+  <Step title="Wait for review">
+    A maintainer will review your PR and may request changes
+  </Step>
+</Steps>
+
+### Pull Request Checklist
+
+<Note>
+  Before submitting, ensure your PR:
+  - ✅ Passes all tests (`npm test`)
+  - ✅ Passes linting (`npm run check`)
+  - ✅ Includes tests for new features
+  - ✅ Updates documentation if needed
+  - ✅ Has a clear description
+</Note>
+
+## Continuous Integration
+
+VK-IO uses GitHub Actions for CI/CD. Every pull request is automatically tested against multiple Node.js versions:
+
+- Node.js 18.x
+- Node.js 20.x
+- Node.js 22.x
+
+The CI pipeline runs:
+1. Install dependencies
+2. Build all packages
+3. Run all tests
+
+<Warning>
+  Your PR must pass all CI checks before it can be merged.
+</Warning>
+
+## Reporting Issues
+
+When reporting issues, please use the appropriate issue template:
+
+<Accordion title="Bug Reports">
+  Include:
+  - **What you did** - Steps to reproduce
+  - **What you expected** - Expected behavior
+  - **What happened** - Actual behavior
+  - **Environment** - vk-io version, Node.js version, OS
+  
+  [Report a bug](https://github.com/negezor/vk-io/issues/new)
+</Accordion>
+
+<Accordion title="Feature Requests">
+  Include:
+  - **Use case** - What problem does this solve?
+  - **Proposed solution** - How should it work?
+  - **Alternatives** - Other approaches you considered
+  
+  [Request a feature](https://github.com/negezor/vk-io/issues/new)
+</Accordion>
+
+<Accordion title="Package-specific Issues">
+  When reporting issues for specific packages, use the appropriate label:
+  - `package: vk-io` - Core library
+  - `package: authorization` - @vk-io/authorization
+  - `package: session` - @vk-io/session
+  - `package: scenes` - @vk-io/scenes
+  - `package: streaming` - @vk-io/streaming
+</Accordion>
+
+## Community Guidelines
+
+<CardGroup cols={2}>
+  <Card title="Be Respectful" icon="handshake">
+    Treat everyone with respect and kindness
+  </Card>
+  
+  <Card title="Be Constructive" icon="comments">
+    Provide helpful feedback and suggestions
+  </Card>
+  
+  <Card title="Be Patient" icon="clock">
+    Maintainers are volunteers with limited time
+  </Card>
+  
+  <Card title="Be Collaborative" icon="users">
+    Work together to improve the project
+  </Card>
+</CardGroup>
+
+## Getting Help
+
+Need help contributing?
+
+<CardGroup cols={2}>
+  <Card title="GitHub Discussions" icon="messages" href="https://github.com/negezor/vk-io/discussions">
+    Ask questions and discuss ideas
+  </Card>
+  
+  <Card title="GitHub Issues" icon="circle-question" href="https://github.com/negezor/vk-io/issues">
+    Search existing issues or create a new one
+  </Card>
+</CardGroup>
+
+## Additional Resources
+
+<CardGroup cols={2}>
+  <Card title="VK API Documentation" icon="book" href="https://dev.vk.ru/">
+    Official VK API reference
+  </Card>
+  
+  <Card title="VK API Schema" icon="code" href="https://github.com/VKCOM/vk-api-schema">
+    Auto-generated API schema
+  </Card>
+  <Card title="Community Modules" icon="puzzle-piece" href="/resources/community-modules">
+    Explore ecosystem packages
+  </Card>
+  
+  <Card title="Examples" icon="rocket" href="/examples/simple-bot">
+    Learn from example code
+  </Card>
+</CardGroup>
+
+## Thank You!
+
+Your contributions make VK-IO better for everyone. Whether you're fixing a typo in the docs or implementing a major feature, every contribution is valued and appreciated.
+
+Happy coding! 🚀

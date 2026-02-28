@@ -1,0 +1,509 @@
+---
+title: Upload Module
+description: Upload photos, videos, documents, and audio files to VK with streaming support
+---
+
+The Upload module provides methods for uploading files to VK. It handles the complete upload flow: getting upload server, uploading files, and saving them.
+
+## Initialization
+
+```typescript
+import { API, Upload } from 'vk-io';
+
+const api = new API({
+  token: process.env.VK_TOKEN
+});
+
+const upload = new Upload({ api });
+```
+
+## Configuration Options
+
+<ParamField path="api" type="API" required>
+  API instance for making requests
+</ParamField>
+
+<ParamField path="uploadTimeout" type="number" default={20000}>
+  Upload timeout in milliseconds (20 seconds)
+</ParamField>
+
+<ParamField path="agent" type="Agent">
+  HTTPS agent for upload requests
+</ParamField>
+
+```typescript
+const upload = new Upload({
+  api,
+  uploadTimeout: 60000  // 60 seconds for large files
+});
+```
+
+## Upload Sources
+
+VK-IO supports multiple input types:
+
+<Tabs>
+  <Tab title="File Path">
+    ```typescript
+    const photo = await upload.messagePhoto({
+      source: {
+        value: './photos/cat.jpg'
+      }
+    });
+    ```
+  </Tab>
+  
+  <Tab title="URL">
+    ```typescript
+    const photo = await upload.messagePhoto({
+      source: {
+        value: 'https://example.com/image.jpg'
+      }
+    });
+    ```
+    
+    <Note>
+      If the server doesn't send `Content-Length` header, you must specify `contentLength` manually.
+    </Note>
+  </Tab>
+  
+  <Tab title="Buffer">
+    ```typescript
+    import { readFileSync } from 'fs';
+    
+    const buffer = readFileSync('./photo.jpg');
+    
+    const photo = await upload.messagePhoto({
+      source: {
+        value: buffer,
+        filename: 'photo.jpg',
+        contentType: 'image/jpeg'
+      }
+    });
+    ```
+  </Tab>
+  
+  <Tab title="Stream">
+    ```typescript
+    import { createReadStream, statSync } from 'fs';
+    
+    const stream = createReadStream('./video.mp4');
+    const stats = statSync('./video.mp4');
+    
+    const video = await upload.video({
+      source: {
+        value: stream,
+        contentLength: stats.size  // Required for streams!
+      }
+    });
+    ```
+    
+    <Warning>
+      You **must** specify `contentLength` for streams. Use `fs.stat()` or `fs.statSync()` to get file size.
+    </Warning>
+  </Tab>
+</Tabs>
+
+## Photo Upload
+
+### Message Photo
+
+Upload photo for messages:
+
+```typescript
+const photo = await upload.messagePhoto({
+  source: {
+    value: './cat.jpg'
+  }
+});
+
+await api.messages.send({
+  peer_id: 123456,
+  message: 'Check out this cat!',
+  attachment: photo,
+  random_id: 0
+});
+```
+
+### Wall Photo
+
+Upload photo for wall posts:
+
+```typescript
+const photo = await upload.wallPhoto({
+  source: {
+    value: './announcement.jpg'
+  },
+  group_id: 123456  // Optional: for group walls
+});
+
+await api.wall.post({
+  owner_id: -123456,
+  message: 'Important announcement',
+  attachments: photo
+});
+```
+
+### Album Photo
+
+Upload to photo album (up to 5 photos):
+
+```typescript
+const photos = await upload.photoAlbum({
+  album_id: 123456,
+  source: {
+    values: [
+      { value: './photo1.jpg' },
+      { value: './photo2.jpg' },
+      { value: './photo3.jpg' }
+    ]
+  },
+  caption: 'Vacation 2024'
+});
+
+console.log(`Uploaded ${photos.length} photos`);
+```
+
+### Owner Photo
+
+Upload profile or group photo:
+
+```typescript
+const result = await upload.ownerPhoto({
+  source: {
+    value: './avatar.jpg'
+  },
+  owner_id: -123456  // Group ID (negative)
+});
+
+console.log('New photo URL:', result.photo_src);
+```
+
+### Cover Photo
+
+Upload community cover:
+
+```typescript
+const cover = await upload.ownerCoverPhoto({
+  source: {
+    value: './cover.jpg'
+  },
+  group_id: 123456,
+  crop_x: 0,
+  crop_y: 0,
+  crop_x2: 1590,
+  crop_y2: 400
+});
+```
+
+## Document Upload
+
+### Message Document
+
+```typescript
+const doc = await upload.messageDocument({
+  source: {
+    value: './report.pdf',
+    filename: 'Monthly_Report.pdf'
+  },
+  title: 'Monthly Report',
+  tags: 'work,report'
+});
+
+await api.messages.send({
+  peer_id: 123456,
+  attachment: doc,
+  random_id: 0
+});
+```
+
+### Wall Document
+
+```typescript
+const doc = await upload.wallDocument({
+  source: {
+    value: './presentation.pptx'
+  },
+  group_id: 123456,
+  title: 'Q4 Presentation'
+});
+```
+
+### Document Types
+
+```typescript
+// Regular document
+const doc = await upload.messageDocument({
+  source: { value: './file.pdf' },
+  type: 'doc'
+});
+
+// Voice message
+const voice = await upload.messageDocument({
+  source: { value: './voice.ogg' },
+  type: 'audio_message'
+});
+
+// Graffiti
+const graffiti = await upload.messageDocument({
+  source: { value: './drawing.png' },
+  type: 'graffiti'
+});
+```
+
+## Video Upload
+
+```typescript
+const video = await upload.video({
+  source: {
+    value: './video.mp4'
+  },
+  name: 'Tutorial Video',
+  description: 'How to use our app',
+  is_private: true,
+  wallpost: false,
+  group_id: 123456  // Optional: upload to group
+});
+
+console.log('Video ID:', video.id);
+```
+
+<Note>
+  Video processing may take time. The video might not be immediately available after upload.
+</Note>
+
+## Audio Upload
+
+```typescript
+const audio = await upload.audio({
+  source: {
+    value: './song.mp3'
+  },
+  artist: 'Artist Name',
+  title: 'Song Title'
+});
+```
+
+## Story Upload
+
+<Tabs>
+  <Tab title="Photo Story">
+    ```typescript
+    const story = await upload.story({
+      source: {
+        value: './story.jpg'
+      },
+      upload_type: 'story',
+      add_to_news: true
+    });
+    ```
+  </Tab>
+  
+  <Tab title="Video Story">
+    ```typescript
+    const story = await upload.videoStory({
+      source: {
+        value: './story.mp4'
+      },
+      add_to_news: true,
+      link_text: 'learn_more',
+      link_url: 'https://example.com'
+    });
+    ```
+  </Tab>
+</Tabs>
+
+## Market Photo Upload
+
+### Main Photo
+
+```typescript
+const photo = await upload.marketPhoto({
+  source: {
+    value: './product.jpg'
+  },
+  group_id: 123456,
+  main_photo: true
+});
+```
+
+### Album Photo
+
+```typescript
+const photo = await upload.marketAlbumPhoto({
+  source: {
+    value: './collection.jpg'
+  },
+  group_id: 123456
+});
+```
+
+## Poll Photo Upload
+
+```typescript
+const photo = await upload.pollPhoto({
+  source: {
+    value: './poll-bg.jpg'
+  },
+  owner_id: -123456
+});
+```
+
+## Advanced Options
+
+### Custom Upload Server
+
+Specify upload server manually:
+
+```typescript
+const photo = await upload.messagePhoto({
+  source: {
+    value: './photo.jpg',
+    uploadUrl: 'https://pu.vk.com/c1234/upload.php?...'
+  }
+});
+```
+
+### Multiple Files
+
+Some methods support multiple files:
+
+```typescript
+const photos = await upload.photoAlbum({
+  album_id: 123456,
+  source: {
+    values: [
+      { value: './photo1.jpg' },
+      { value: './photo2.jpg' },
+      { value: 'https://example.com/photo3.jpg' },
+      { value: Buffer.from('...'), filename: 'photo4.jpg' }
+    ]
+  }
+});
+```
+
+### Complete Options
+
+```typescript
+const photo = await upload.messagePhoto({
+  source: {
+    values: [{
+      value: './photo.jpg',
+      filename: 'custom-name.jpg',
+      contentType: 'image/jpeg',
+      contentLength: 241000  // Required for streams
+    }],
+    timeout: 60000,  // Override default timeout
+    uploadUrl: 'https://...'  // Custom upload server
+  }
+});
+```
+
+## Return Types
+
+Most upload methods return attachment instances:
+
+```typescript
+// Returns PhotoAttachment
+const photo = await upload.messagePhoto({ /* ... */ });
+console.log(photo.toString()); // 'photo123456_789012'
+
+// Use directly in API calls
+await api.messages.send({
+  peer_id: 123456,
+  attachment: photo,  // Automatically converts to string
+  random_id: 0
+});
+
+// Access attachment data
+console.log(photo.id);      // 789012
+console.log(photo.ownerId); // 123456
+console.log(photo.sizes);   // Array of photo sizes
+```
+
+## Error Handling
+
+```typescript
+import { UploadError } from 'vk-io';
+
+try {
+  const photo = await upload.messagePhoto({
+    source: { value: './photo.jpg' }
+  });
+} catch (error) {
+  if (error instanceof UploadError) {
+    console.error('Upload failed:', error.code);
+    console.error('Message:', error.message);
+  }
+}
+```
+
+**Common error codes**:
+- `MISSING_PARAMETERS` - Required parameters missing
+- `NO_FILES_TO_UPLOAD` - No files specified
+- `EXCEEDED_MAX_FILES` - Too many files
+- `UNSUPPORTED_SOURCE_TYPE` - Invalid source type
+
+## Timeout Configuration
+
+<Warning>
+  If you see `The user aborted a request` error, increase the timeout:
+</Warning>
+
+```typescript
+// Global timeout
+const upload = new Upload({
+  api,
+  uploadTimeout: 120000  // 2 minutes
+});
+
+// Per-request timeout
+const video = await upload.video({
+  source: {
+    value: './large-video.mp4',
+    timeout: 300000  // 5 minutes for this upload
+  }
+});
+```
+
+## Best Practices
+
+<Tip>
+  **File Size**: Check file sizes before upload to avoid timeouts:
+  
+  ```typescript
+  import { statSync } from 'fs';
+  
+  const stats = statSync('./video.mp4');
+  const sizeMB = stats.size / (1024 * 1024);
+  
+  if (sizeMB > 100) {
+    console.warn('Large file, increasing timeout');
+    await upload.video({
+      source: {
+        value: './video.mp4',
+        timeout: 600000  // 10 minutes
+      }
+    });
+  }
+  ```
+</Tip>
+
+<Tip>
+  **Streams**: Always use async `fs.stat()` instead of `statSync()` in production:
+  
+  ```typescript
+  import { createReadStream } from 'fs';
+  import { stat } from 'fs/promises';
+  
+  const stats = await stat('./file.mp4');
+  const stream = createReadStream('./file.mp4');
+  
+  const video = await upload.video({
+    source: {
+      value: stream,
+      contentLength: stats.size
+    }
+  });
+  ```
+</Tip>

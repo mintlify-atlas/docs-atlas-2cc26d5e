@@ -1,0 +1,349 @@
+---
+title: Collect Utilities
+description: Iterator utilities for paginated data collection from VK API
+icon: layer-group
+---
+
+The collect utilities provide powerful iterator-based methods for efficiently fetching large datasets from VK API with automatic pagination, parallel requests, and error handling.
+
+## createCollectIterator
+
+Creates an async iterator that automatically handles pagination for VK API methods returning large datasets.
+
+```typescript
+import { createCollectIterator } from 'vk-io';
+
+const iterator = createCollectIterator<ItemType>({
+  api,
+  method: 'wall.get',
+  params: { owner_id: -1 },
+  countPerRequest: 100,
+  maxCount: 1000,
+  parallelRequests: 25
+});
+
+for await (const data of iterator) {
+  console.log(`Progress: ${data.percent}%`);
+  console.log(`Items: ${data.items.length}`);
+}
+```
+
+### Options
+
+<ParamField path="api" type="API" required>
+  VK API instance to use for making requests.
+</ParamField>
+
+<ParamField path="method" type="string" required>
+  VK API method name (e.g., `'wall.get'`, `'groups.getMembers'`).
+</ParamField>
+
+<ParamField path="params" type="object" required>
+  Parameters to pass to the API method. Can include:
+  <Expandable title="properties">
+    <ResponseField name="count" type="number">
+      Maximum number of items to fetch in total.
+    </ResponseField>
+    <ResponseField name="offset" type="number">
+      Starting offset for pagination.
+    </ResponseField>
+    <ResponseField name="..." type="any">
+      Any method-specific parameters.
+    </ResponseField>
+  </Expandable>
+</ParamField>
+
+<ParamField path="countPerRequest" type="number" required>
+  Number of items to fetch per API request (e.g., 100).
+</ParamField>
+
+<ParamField path="maxCount" type="number" default="Infinity">
+  Maximum total number of items to collect.
+</ParamField>
+
+<ParamField path="retryLimit" type="number" default="3">
+  Number of retry attempts on error.
+</ParamField>
+
+<ParamField path="parallelRequests" type="number" default="25">
+  Number of parallel requests to execute (1-25). Uses `execute` method for parallel requests.
+</ParamField>
+
+### Yielded Data
+
+Each iteration yields an object with the following structure:
+
+<ResponseField name="received" type="number">
+  Total number of items received so far.
+</ResponseField>
+
+<ResponseField name="percent" type="number">
+  Progress percentage (0-100).
+</ResponseField>
+
+<ResponseField name="total" type="number">
+  Total number of items available.
+</ResponseField>
+
+<ResponseField name="items" type="T[]">
+  Array of items received in this batch.
+</ResponseField>
+
+<ResponseField name="profiles" type="UsersUserFull[]">
+  User profiles returned with the items (if applicable).
+</ResponseField>
+
+<ResponseField name="groups" type="GroupsGroupFull[]">
+  Group objects returned with the items (if applicable).
+</ResponseField>
+
+## Chain
+
+Chain class for batching multiple API requests using VK's `execute` method.
+
+```typescript
+import { vk } from './instance';
+
+const chain = vk.api.chain();
+
+// Add requests to the chain
+const promise1 = chain.append('users.get', { user_ids: 1 });
+const promise2 = chain.append('groups.getById', { group_id: 1 });
+const promise3 = chain.append('wall.get', { owner_id: 1, count: 10 });
+
+// Execute all requests
+await chain.run();
+
+// Get individual results
+const users = await promise1;
+const groups = await promise2;
+const wall = await promise3;
+```
+
+### Methods
+
+#### append
+
+Adds a method to the execution queue.
+
+<ParamField path="method" type="string" required>
+  VK API method name.
+</ParamField>
+
+<ParamField path="params" type="object" required>
+  Parameters for the API method.
+</ParamField>
+
+**Returns:** `Promise<T>` - Promise that resolves with the method result.
+
+<Warning>
+  Cannot append new requests after calling `run()`. Will throw `ALREADY_STARTED` error.
+</Warning>
+
+#### run
+
+Executes all queued requests using `execute` method.
+
+**Returns:** `Promise<IExecutesPayload>`
+
+<ResponseField name="response" type="any[]">
+  Array of all successful responses.
+</ResponseField>
+
+<ResponseField name="errors" type="ExecuteError[]">
+  Array of errors that occurred during execution.
+</ResponseField>
+
+#### then
+
+Allows using chain as a promise (calls `run()` automatically).
+
+```typescript
+const { response, errors } = await chain;
+```
+
+## executes
+
+Executes multiple identical method calls with different parameters.
+
+```typescript
+import { executes } from 'vk-io';
+
+const result = await executes({
+  api: vk.api,
+  method: 'users.get',
+  queue: [
+    { user_ids: 1 },
+    { user_ids: 2 },
+    { user_ids: 3 }
+  ]
+});
+
+console.log(result.response); // Array of results
+console.log(result.errors);   // Array of errors
+```
+
+### Options
+
+<ParamField path="api" type="API" required>
+  VK API instance.
+</ParamField>
+
+<ParamField path="method" type="string" required>
+  VK API method to execute.
+</ParamField>
+
+<ParamField path="queue" type="object[]" required>
+  Array of parameter objects for each method call.
+</ParamField>
+
+**Returns:** `Promise<IExecutesPayload>`
+
+## Usage Examples
+
+### Collecting Wall Posts
+
+```typescript
+const posts = [];
+
+const iterator = createCollectIterator({
+  api: vk.api,
+  method: 'wall.get',
+  params: { owner_id: -1, filter: 'owner' },
+  countPerRequest: 100,
+  maxCount: 500
+});
+
+for await (const data of iterator) {
+  posts.push(...data.items);
+  console.log(`Collected ${data.received}/${data.total} posts`);
+}
+```
+
+### Collecting Group Members
+
+```typescript
+const members = [];
+const profiles = [];
+
+const iterator = createCollectIterator({
+  api: vk.api,
+  method: 'groups.getMembers',
+  params: { 
+    group_id: '1',
+    fields: ['photo_100', 'city', 'verified']
+  },
+  countPerRequest: 1000,
+  parallelRequests: 25
+});
+
+for await (const data of iterator) {
+  members.push(...data.items);
+  profiles.push(...data.profiles);
+  
+  console.log(`Progress: ${data.percent}%`);
+}
+```
+
+### Batch Requests with Chain
+
+```typescript
+const chain = vk.api.chain();
+
+// Queue multiple requests
+const userPromise = chain.append('users.get', { 
+  user_ids: [1, 2, 3],
+  fields: ['photo_100', 'city']
+});
+
+const groupPromise = chain.append('groups.getById', {
+  group_ids: ['1', '2'],
+  fields: ['members_count', 'description']
+});
+
+const wallPromise = chain.append('wall.get', {
+  owner_id: 1,
+  count: 20
+});
+
+// Execute all at once
+const { response, errors } = await chain.run();
+
+// Or use individual promises
+const users = await userPromise;
+const groups = await groupPromise;
+const wall = await wallPromise;
+```
+
+### Parallel Method Execution
+
+```typescript
+// Execute same method with different params
+const result = await executes({
+  api: vk.api,
+  method: 'groups.getById',
+  queue: [
+    { group_id: '1', fields: ['members_count'] },
+    { group_id: '2', fields: ['members_count'] },
+    { group_id: '3', fields: ['members_count'] },
+    { group_id: '4', fields: ['members_count'] }
+  ]
+});
+
+result.response.forEach((group, index) => {
+  console.log(`Group ${index + 1}:`, group);
+});
+
+if (result.errors.length > 0) {
+  console.error('Some requests failed:', result.errors);
+}
+```
+
+## Error Handling
+
+### CollectError
+
+Thrown when collect iterator encounters errors during execution.
+
+```typescript
+try {
+  for await (const data of iterator) {
+    // Process data
+  }
+} catch (error) {
+  if (error.code === 'EXECUTE_ERROR') {
+    console.error('Execute errors:', error.errors);
+  }
+}
+```
+
+### Automatic Fallback
+
+The iterator automatically falls back to single requests if:
+- Token doesn't support `execute` method (app auth)
+- Runtime errors occur with parallel requests
+
+```typescript
+// Automatically handles execute failures
+const iterator = createCollectIterator({
+  api: vk.api,
+  method: 'wall.get',
+  params: { owner_id: 1 },
+  countPerRequest: 100,
+  parallelRequests: 25  // Falls back to 1 if needed
+});
+```
+
+## Performance Tips
+
+<Tip>
+  Use `parallelRequests: 25` for maximum performance when fetching large datasets. The iterator uses VK's `execute` method to batch requests.
+</Tip>
+
+<Note>
+  The `countPerRequest` should match the maximum count allowed by the specific API method. For example, `wall.get` allows up to 100 items per request.
+</Note>
+
+<Warning>
+  Some tokens (like app access tokens) don't support the `execute` method. The iterator automatically detects this and falls back to single requests.
+</Warning>

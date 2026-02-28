@@ -1,0 +1,448 @@
+---
+title: 'Migration to v4'
+description: 'Complete guide to migrating from VK-IO v3 to v4'
+icon: 'arrow-up-right-dots'
+---
+
+VK-IO v4 is the next major update with significant improvements to type safety, immutability, and API design. This guide will help you migrate from v3 to v4.
+
+## Overview
+
+<CardGroup cols={2}>
+  <Card title="Type System" icon="code">
+    Major improvements to TypeScript typings throughout the library
+  </Card>
+  <Card title="Immutability" icon="lock">
+    Library now follows immutable principles for better predictability
+  </Card>
+  <Card title="Independence" icon="cube">
+    Components no longer depend on the main VK instance
+  </Card>
+  <Card title="Simplification" icon="wand-magic-sparkles">
+    Removed redundant components in favor of simple functions
+  </Card>
+</CardGroup>
+
+<Warning>
+  VK-IO v4 requires **Node.js 12.20.0 or higher**. Older versions are no longer supported.
+</Warning>
+
+## Breaking Changes
+
+### Import Changes
+
+<Steps>
+  <Step title="Update default import">
+    The default export has been removed. Use named imports instead:
+
+    ```diff
+    - import VK from 'vk-io';
+    + import { VK } from 'vk-io';
+    ```
+  </Step>
+</Steps>
+
+### VK Class Changes
+
+<Accordion title="Removed getters and setters">
+  The following getters and setters have been removed:
+
+  - `vk.token` (getter/setter) - removed
+  - `vk.captchaHandler` (setter) - use `vk.callbackService.onCaptcha()` method instead
+  - `vk.twoFactorHandler` (setter) - use `vk.callbackService.onTwoFactor()` method instead
+
+  ```diff
+  - vk.captchaHandler = (payload, retry) => { ... };
+  + vk.callbackService.onCaptcha((payload, retry) => { ... });
+  ```
+</Accordion>
+
+<Accordion title="Removed methods">
+  - `vk.setOptions()` - removed
+  - Configuration must be set during instantiation
+</Accordion>
+
+<Accordion title="Removed modules">
+  Several built-in modules have been extracted into separate packages:
+
+  | Old | New Package |
+  |-----|-------------|
+  | `vk.auth` | [@vk-io/authorization](https://github.com/negezor/vk-io/tree/master/packages/authorization) |
+  | `vk.streaming` | [@vk-io/streaming](https://github.com/negezor/vk-io/tree/master/packages/streaming) |
+
+  ```diff
+  - vk.auth.implicitFlow();
+  + import { ImplicitFlow } from '@vk-io/authorization';
+  + const auth = new ImplicitFlow({ ... });
+  ```
+</Accordion>
+
+### API Changes
+
+<Accordion title="Configuration options renamed">
+  ```diff
+  const vk = new VK({
+      token: 'YOUR_TOKEN',
+  -   apiAttempts: 3,
+  +   apiRetryLimit: 3,
+  });
+  ```
+</Accordion>
+
+<Accordion title="Removed automatic behaviors">
+  - **Automatic account verification removed** - use `@vk-io/authorization` package with `AccountVerification` class
+  - **Automatic `random_id` in messages.send() removed** - use `getRandomId()` function:
+
+  ```javascript
+  import { getRandomId } from 'vk-io';
+
+  await api.messages.send({
+      peer_id: 1234,
+      random_id: getRandomId(),
+      text: 'Hello!'
+  });
+  ```
+</Accordion>
+
+<Accordion title="API schema changes">
+  - `vk.api.API_VERSION` getter removed
+  - `APIErrorCode` enum now auto-generated from [VK API schema](https://github.com/VKCOM/vk-api-schema)
+  - Schema objects now exported in their own namespaces: `Params`, `Objects`, and `Responses`
+</Accordion>
+
+### Snippets & Utilities
+
+<Accordion title="resolveResource()">
+  `vk.snippets.resolveResource()` has been removed. Use the standalone `resolveResource()` function:
+
+  ```diff
+  - const result = await vk.snippets.resolveResource('https://vk.com/durov');
+  + import { resolveResource } from 'vk-io';
+  + const result = await resolveResource({
+  +     api,
+  +     resource: 'https://vk.com/durov'
+  + });
+  ```
+</Accordion>
+
+<Accordion title="Collect methods">
+  The `vk.collect` module has been split into smaller classes and functions:
+
+  **Chain** - Use the `Chain` class:
+  ```javascript
+  import { Chain } from 'vk-io';
+
+  const chain = new Chain({ api });
+  ```
+
+  **Executes** - Use the `executes()` function:
+  ```javascript
+  import { executes } from 'vk-io';
+
+  const result = await executes({
+      api,
+      method: 'users.get',
+      queue: [
+          { user_id: 1 },
+          { user_id: 2 },
+          { user_id: 3 }
+      ]
+  });
+  ```
+
+  **Collect Iterator** - Use `createCollectIterator()` function:
+  ```javascript
+  import { createCollectIterator } from 'vk-io';
+
+  const iterator = createCollectIterator({
+      api,
+      method: 'messages.getConversations',
+      params: {
+          extended: 1
+      },
+      countPerRequest: 200
+  });
+
+  for await (const chunk of iterator) {
+      console.log(chunk.items);
+      console.log(chunk.profiles);
+      console.log(chunk.groups);
+  }
+  ```
+</Accordion>
+
+### Context Changes
+
+<Accordion title="MessageContext changes">
+  **Return values:**
+  - `context.send()` now returns a `MessageContext` instance
+  - `context.replyMessage` now returns `MessageContext` instead of `MessageReply`
+  - `context.forwards` now returns an array of `MessageContext` instead of `MessageForward`
+
+  **Method parameters changed:**
+  Methods like `sendPhotos()`, `sendDocuments()`, `sendAudioMessage()` now accept objects:
+
+  ```diff
+  - context.sendPhotos('./cat.png');
+  + context.sendPhotos({
+  +     value: './cat.png'
+  + });
+  ```
+
+  **Removed methods:**
+  - `context.getInviteLink()`
+  - `context.markAsImportant()`
+  - `context.renameChat()`
+  - `context.newChatPhoto()`
+  - `context.deleteChatPhoto()`
+  - `context.inviteUser()`
+  - `context.kickUser()`
+  - `context.pinMessage()`
+  - `context.unpinMessage()`
+  - `context.editMessageText()`
+  - `context.sendSticker()` - use `context.send({ sticker_id: 123 })` instead
+</Accordion>
+
+<Accordion title="Context renamings">
+  Several context classes and properties have been renamed for consistency:
+
+  | Old Name | New Name |
+  |----------|----------|
+  | `CommentActionContext` | `CommentContext` |
+  | `UserOnlineContext` | `FriendActivityContext` |
+  | `ReadMessagesContext` | `MessagesReadContext` |
+  | `MessageAllowContext` | `MessageSubscriptionContext` |
+  | `RemovedMessagesContext` | `DialogMessagesContext` |
+</Accordion>
+
+<Accordion title="Null to undefined">
+  All contexts now use `undefined` instead of `null` for better destructuring support:
+
+  ```javascript
+  updates.on('message_new', async (context) => {
+      const { text = 'default text' } = context;
+
+      if (text === 'default text') {
+          return context.send('You wrote nothing');
+      }
+
+      await context.send('Hello!');
+  });
+  ```
+</Accordion>
+
+### Updates Changes
+
+<Accordion title="Removed hear() method">
+  The `updates.hear()` method and `updates.setHearFallbackHandler()` have been removed.
+
+  Use the [@vk-io/hear](https://github.com/negezor/vk-io/tree/master/packages/hear) package instead:
+
+  ```javascript
+  import { HearManager } from '@vk-io/hear';
+
+  const hearManager = new HearManager();
+
+  updates.on('message', hearManager.middleware);
+
+  hearManager.hear('/start', async (context) => {
+      await context.send('Welcome!');
+  });
+  ```
+</Accordion>
+
+<Accordion title="Event names updated">
+  Now using [official VK event names](https://dev.vk.ru/api/community-events/json-schema):
+
+  ```diff
+  - updates.on('message', ...);
+  + updates.on('message_new', ...);
+  ```
+</Accordion>
+
+<Accordion title="Webhook changes">
+  The second argument for `updates.startWebhook()` has been removed. Use the `next` property instead:
+
+  ```diff
+  - updates.startWebhook({ port: 8080 }, (req, res) => { ... });
+  + updates.startWebhook({
+  +     port: 8080,
+  +     next: (req, res) => { ... }
+  + });
+  ```
+</Accordion>
+
+<Accordion title="Configuration changes">
+  - **Polling version updated to 10**
+  - Option renamed: `pollingAttempts` → `pollingRetryLimit`
+
+  ```diff
+  const { updates } = vk;
+  updates.start({
+  -   pollingAttempts: 3
+  +   pollingRetryLimit: 3
+  });
+  ```
+</Accordion>
+
+### Upload Changes
+
+<Accordion title="Source format changes">
+  The `source` parameter format has changed. It now accepts two interfaces:
+
+  **Single file:**
+  ```javascript
+  upload.messagePhoto({
+      source: {
+          value: 'https://picsum.photos/200/300/?image=1',
+          filename: 'image.jpeg',
+          contentType: 'image/jpeg',
+          contentLength: 12345 // Optional but recommended for streams
+      }
+  });
+  ```
+
+  **Multiple files:**
+  ```javascript
+  upload.messagePhoto({
+      source: {
+          uploadUrl: '...', // Optional
+          timeout: 30000,   // Optional
+          values: [{
+              value: './photo1.jpg'
+          }, {
+              value: './photo2.jpg'
+          }]
+      }
+  });
+  ```
+
+  <Note>
+    When using streams without size information, you **must** specify `contentLength`, especially for `upload.video()`.
+  </Note>
+</Accordion>
+
+<Accordion title="Method changes">
+  - `upload.storiesPhoto()` and `upload.storiesVideo()` now return `StoryAttachment`
+  - `upload.graffiti()` removed - use `upload.documentGraffiti()` or `upload.messageGraffiti()` instead
+</Accordion>
+
+### Keyboard Changes
+
+```diff
+- Keyboard.DEFAULT_COLOR
++ Keyboard.SECONDARY_COLOR
+```
+
+### Attachment Changes
+
+<Accordion title="Constructor changes">
+  Attachment constructors now require options objects:
+
+  ```typescript
+  interface IAttachmentOptions<P, Type extends string = string> {
+      api: API;
+      type: Type;
+      payload: Partial<ISharedAttachmentPayload> & P;
+  }
+  ```
+</Accordion>
+
+<Accordion title="DocumentAttachment">
+  - `document.typeName` getter removed
+</Accordion>
+
+### Export Changes
+
+Many lowercase exports have been replaced with PascalCase enums:
+
+```diff
+- import { attachmentTypes } from 'vk-io';
++ import { AttachmentType } from 'vk-io';
+
+- import { apiErrors } from 'vk-io';
++ import { APIErrorCode } from 'vk-io';
+
+- import { captchaTypes } from 'vk-io';
++ import { CaptchaType } from 'vk-io';
+
+- import { messageSources } from 'vk-io';
++ import { MessageSource } from 'vk-io';
+
+- import { resourceTypes } from 'vk-io';
++ import { ResourceType } from 'vk-io';
+
+- import { updatesSources } from 'vk-io';
++ import { UpdateSource } from 'vk-io';
+```
+
+Full list of renamed exports:
+- `attachmentTypes` → `AttachmentType`
+- `defaultExtensions` → `DefaultExtension`
+- `defaultContentTypes` → `DefaultContentType`
+- `captchaTypes` → `CaptchaType`
+- `messageSources` → `MessageSource`
+- `resourceTypes` → `ResourceType`
+- `updatesSources` → `UpdateSource`
+- `apiErrors` → `APIErrorCode`
+- `uploadErrors` → `UploadErrorCode`
+- `updatesErrors` → `UpdatesErrorCode`
+- `snippetsErrors` → `ResourceErrorCode`
+- `sharedErrors` → `SharedErrorCode`
+
+## Migration Checklist
+
+<Steps>
+  <Step title="Update Node.js version">
+    Ensure you're running Node.js 12.20.0 or higher
+  </Step>
+  
+  <Step title="Update imports">
+    Change default imports to named imports and update enum imports
+  </Step>
+  
+  <Step title="Update configuration">
+    Rename `apiAttempts` to `apiRetryLimit` and `pollingAttempts` to `pollingRetryLimit`
+  </Step>
+  
+  <Step title="Migrate modules">
+    Install separate packages for `auth` and `streaming` if needed
+  </Step>
+  
+  <Step title="Update utility calls">
+    Replace `vk.snippets.*` and `vk.collect.*` with standalone functions
+  </Step>
+  
+  <Step title="Update message sending">
+    Add `random_id` manually using `getRandomId()` for `messages.send()`
+  </Step>
+  
+  <Step title="Update context handlers">
+    Check for renamed context classes and removed methods
+  </Step>
+  
+  <Step title="Migrate hear handlers">
+    Install and use `@vk-io/hear` package if using hear patterns
+  </Step>
+  
+  <Step title="Update upload calls">
+    Adjust source parameter format for upload methods
+  </Step>
+  
+  <Step title="Test thoroughly">
+    Run your application and fix any TypeScript errors
+  </Step>
+</Steps>
+
+## Need Help?
+
+If you encounter issues during migration:
+
+<CardGroup cols={2}>
+  <Card title="GitHub Issues" icon="github" href="https://github.com/negezor/vk-io/issues">
+    Report bugs or ask questions
+  </Card>
+  <Card title="Community Modules" icon="puzzle-piece" href="/resources/community-modules">
+    Explore ecosystem packages
+  </Card>
+</CardGroup>

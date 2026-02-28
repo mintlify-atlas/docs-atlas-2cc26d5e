@@ -1,0 +1,547 @@
+---
+title: 'API'
+description: 'VK API methods interface for making API calls'
+icon: 'brackets-curly'
+---
+
+The `API` class provides a complete interface for calling VK API methods. It handles request queuing, rate limiting, error handling, and automatic retry logic.
+
+## Constructor
+
+```typescript
+import { API } from 'vk-io';
+
+const api = new API({
+  token: 'your_access_token'
+});
+```
+
+<Note>
+Typically, you don't need to instantiate API directly. Use `vk.api` from the VK instance instead.
+</Note>
+
+### Parameters
+
+<ParamField path="options" type="Partial<IAPIOptions> & { token: string }" required>
+  Configuration options for the API instance. See [VK constructor options](/api-reference/vk#parameters) for all available options.
+</ParamField>
+
+## Properties
+
+<ResponseField name="options" type="IAPIOptions">
+  Current API configuration options. You can modify these at runtime:
+  
+  ```typescript
+  vk.api.options.apiLimit = 5; // Increase rate limit
+  vk.api.updateWorker(); // Apply changes
+  ```
+</ResponseField>
+
+## Methods
+
+### call()
+
+Makes a raw API method call.
+
+```typescript
+const response = await api.call('users.get', {
+  user_ids: [1]
+});
+```
+
+<ParamField path="method" type="string" required>
+  VK API method name (e.g., `users.get`, `messages.send`).
+</ParamField>
+
+<ParamField path="params" type="object" required>
+  Method parameters as key-value pairs.
+</ParamField>
+
+<ResponseField name="response" type="T">
+  API response data. Type can be specified with generic: `api.call<User[]>(...)`
+</ResponseField>
+
+### execute()
+
+Executes VKScript code on VK servers.
+
+```typescript
+const result = await api.execute({
+  code: 'return API.users.get({ user_ids: [1, 2, 3] });'
+});
+```
+
+<ParamField path="params" type="object" required>
+  <Expandable title="Parameters">
+    <ParamField path="code" type="string" required>
+      VKScript code to execute on the server.
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+<ResponseField name="response" type="IExecuteResponse<T>">
+  Execute response with results and any errors that occurred.
+  
+  <Expandable title="IExecuteResponse">
+    <ResponseField name="response" type="T">
+      Execution result.
+    </ResponseField>
+    
+    <ResponseField name="errors" type="ExecuteError[]">
+      Array of errors that occurred during execution.
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+### procedure()
+
+Calls a stored VKScript procedure.
+
+```typescript
+const result = await api.procedure('myProcedure', {
+  user_id: 123
+});
+```
+
+<ParamField path="name" type="string" required>
+  Name of the stored procedure.
+</ParamField>
+
+<ParamField path="params" type="object" required>
+  Parameters to pass to the procedure.
+</ParamField>
+
+<ResponseField name="response" type="IExecuteResponse<T>">
+  Procedure execution response.
+</ResponseField>
+
+### callWithRequest()
+
+Enqueues a custom API request for execution.
+
+```typescript
+import { APIRequest } from 'vk-io';
+
+const request = new APIRequest({
+  api,
+  method: 'users.get',
+  params: { user_ids: [1] }
+});
+
+const response = await api.callWithRequest(request);
+```
+
+<ParamField path="request" type="APIRequest" required>
+  Custom API request instance.
+</ParamField>
+
+<ResponseField name="response" type="Promise<T>">
+  Promise that resolves with the API response.
+</ResponseField>
+
+### updateWorker()
+
+Updates the internal request worker when configuration changes.
+
+```typescript
+vk.api.options.apiMode = 'parallel';
+vk.api.updateWorker();
+```
+
+<Note>
+Call this after modifying API options at runtime to apply changes.
+</Note>
+
+## API Method Groups
+
+The API class provides typed method groups for all VK API endpoints:
+
+### account
+
+```typescript
+await vk.api.account.getInfo();
+await vk.api.account.setOnline();
+```
+
+### apps
+
+```typescript
+const apps = await vk.api.apps.get({
+  app_id: 123
+});
+```
+
+### audio
+
+```typescript
+const audio = await vk.api.audio.get({
+  owner_id: 123
+});
+```
+
+### board
+
+```typescript
+const topics = await vk.api.board.getTopics({
+  group_id: 123
+});
+```
+
+### database
+
+```typescript
+const countries = await vk.api.database.getCountries();
+const cities = await vk.api.database.getCities({
+  country_id: 1
+});
+```
+
+### docs
+
+```typescript
+const docs = await vk.api.docs.get({
+  owner_id: 123
+});
+```
+
+### fave
+
+```typescript
+const posts = await vk.api.fave.getPosts();
+```
+
+### friends
+
+```typescript
+const friends = await vk.api.friends.get({
+  user_id: 123
+});
+
+await vk.api.friends.add({
+  user_id: 456
+});
+```
+
+### gifts
+
+```typescript
+const gifts = await vk.api.gifts.get({
+  user_id: 123
+});
+```
+
+### groups
+
+```typescript
+const groups = await vk.api.groups.get({
+  user_id: 123
+});
+
+const group = await vk.api.groups.getById({
+  group_id: 123
+});
+
+await vk.api.groups.join({
+  group_id: 123
+});
+```
+
+### likes
+
+```typescript
+await vk.api.likes.add({
+  type: 'post',
+  owner_id: 123,
+  item_id: 456
+});
+```
+
+### market
+
+```typescript
+const items = await vk.api.market.get({
+  owner_id: -123
+});
+```
+
+### messages
+
+```typescript
+await vk.api.messages.send({
+  peer_id: 123,
+  message: 'Hello!',
+  random_id: 0
+});
+
+const history = await vk.api.messages.getHistory({
+  peer_id: 123
+});
+```
+
+### newsfeed
+
+```typescript
+const feed = await vk.api.newsfeed.get();
+```
+
+### notes
+
+```typescript
+const notes = await vk.api.notes.get();
+```
+
+### notifications
+
+```typescript
+const notifications = await vk.api.notifications.get();
+```
+
+### photos
+
+```typescript
+const albums = await vk.api.photos.getAlbums({
+  owner_id: 123
+});
+
+const photos = await vk.api.photos.get({
+  owner_id: 123,
+  album_id: 'wall'
+});
+```
+
+### polls
+
+```typescript
+const poll = await vk.api.polls.getById({
+  poll_id: 123,
+  owner_id: 456
+});
+```
+
+### stats
+
+```typescript
+const stats = await vk.api.stats.get({
+  group_id: 123
+});
+```
+
+### status
+
+```typescript
+const status = await vk.api.status.get();
+await vk.api.status.set({ text: 'New status' });
+```
+
+### storage
+
+```typescript
+await vk.api.storage.set({
+  key: 'myKey',
+  value: 'myValue'
+});
+
+const value = await vk.api.storage.get({
+  key: 'myKey'
+});
+```
+
+### stories
+
+```typescript
+const stories = await vk.api.stories.get();
+```
+
+### users
+
+```typescript
+const users = await vk.api.users.get({
+  user_ids: [1, 2, 3],
+  fields: ['photo_100', 'city', 'verified']
+});
+
+const search = await vk.api.users.search({
+  q: 'John Doe'
+});
+```
+
+### utils
+
+```typescript
+const shortUrl = await vk.api.utils.getShortLink({
+  url: 'https://example.com'
+});
+
+const time = await vk.api.utils.getServerTime();
+```
+
+### video
+
+```typescript
+const videos = await vk.api.video.get({
+  owner_id: 123
+});
+```
+
+### wall
+
+```typescript
+const wall = await vk.api.wall.get({
+  owner_id: 123
+});
+
+await vk.api.wall.post({
+  owner_id: -123,
+  message: 'New post!'
+});
+```
+
+## Examples
+
+### Basic API Calls
+
+```typescript
+import { VK } from 'vk-io';
+
+const vk = new VK({ token: process.env.VK_TOKEN });
+
+// Get user information
+const [user] = await vk.api.users.get({
+  user_ids: [1],
+  fields: ['photo_200', 'city', 'verified']
+});
+
+console.log(`${user.first_name} ${user.last_name}`);
+```
+
+### Sending Messages
+
+```typescript
+import { VK } from 'vk-io';
+
+const vk = new VK({ token: process.env.VK_TOKEN });
+
+await vk.api.messages.send({
+  peer_id: 123456789,
+  message: 'Hello from VK-IO!',
+  random_id: Math.floor(Math.random() * 1000000)
+});
+```
+
+### Using Execute for Batch Requests
+
+```typescript
+const { response, errors } = await vk.api.execute<any[]>({
+  code: `
+    var users = API.users.get({ user_ids: [1, 2, 3] });
+    var groups = API.groups.getById({ group_id: 1 });
+    return { users: users, groups: groups };
+  `
+});
+
+console.log(response.users);
+console.log(response.groups);
+```
+
+### Error Handling
+
+```typescript
+import { VK, APIError } from 'vk-io';
+
+const vk = new VK({ token: process.env.VK_TOKEN });
+
+try {
+  await vk.api.messages.send({
+    peer_id: 123,
+    message: 'Hello',
+    random_id: 0
+  });
+} catch (error) {
+  if (error instanceof APIError) {
+    console.error(`API Error ${error.code}: ${error.message}`);
+    console.error('Request params:', error.params);
+  }
+}
+```
+
+### Rate Limiting Configuration
+
+```typescript
+const vk = new VK({
+  token: process.env.VK_TOKEN,
+  apiLimit: 20, // 20 requests per second
+  apiMode: 'parallel', // Use execute batching
+  apiExecuteCount: 25 // Batch up to 25 requests
+});
+
+// Make many requests - they'll be automatically rate limited and batched
+const userIds = Array.from({ length: 100 }, (_, i) => i + 1);
+const users = await Promise.all(
+  userIds.map(id => vk.api.users.get({ user_ids: [id] }))
+);
+```
+
+### Working with Large Datasets
+
+```typescript
+import { VK } from 'vk-io';
+
+const vk = new VK({ token: process.env.VK_TOKEN });
+
+async function getAllFriends(userId: number) {
+  const friends = [];
+  let offset = 0;
+  const count = 5000; // Max allowed by VK
+  
+  while (true) {
+    const response = await vk.api.friends.get({
+      user_id: userId,
+      offset,
+      count
+    });
+    
+    friends.push(...response.items);
+    
+    if (response.items.length < count) {
+      break;
+    }
+    
+    offset += count;
+  }
+  
+  return friends;
+}
+
+const allFriends = await getAllFriends(123);
+console.log(`Total friends: ${allFriends.length}`);
+```
+
+## Best Practices
+
+<Tip>
+**Use Typed Responses**: Import types from `vk-io` for better TypeScript support:
+```typescript
+import { API } from 'vk-io';
+import type { UsersUserFull } from 'vk-io';
+
+const users = await vk.api.users.get<UsersUserFull[]>({
+  user_ids: [1],
+  fields: ['photo_200']
+});
+```
+</Tip>
+
+<Warning>
+**Rate Limits**: Always respect VK's rate limits. The default `apiLimit: 3` is safe for user tokens. Service tokens may allow higher limits.
+</Warning>
+
+<Note>
+**Random ID for Messages**: When sending messages, always provide a unique `random_id` to prevent duplicate sends:
+```typescript
+await vk.api.messages.send({
+  peer_id: 123,
+  message: 'Hello',
+  random_id: Math.floor(Math.random() * 2147483647)
+});
+```
+</Note>

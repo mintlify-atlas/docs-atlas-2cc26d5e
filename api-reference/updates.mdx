@@ -1,0 +1,605 @@
+---
+title: 'Updates'
+description: 'Handle VK events and updates via Long Poll or Webhooks'
+icon: 'bolt'
+---
+
+The `Updates` class handles receiving and processing events from VK (messages, wall posts, likes, etc.) using either Long Poll or Webhooks.
+
+## Constructor
+
+```typescript
+import { Updates } from 'vk-io';
+
+const updates = new Updates({
+  api: vk.api,
+  upload: vk.upload
+});
+```
+
+<Note>
+Typically, you don't need to instantiate Updates directly. Use `vk.updates` from the VK instance instead.
+</Note>
+
+### Parameters
+
+<ParamField path="options" type="Partial<IUpdatesOptions> & { api: API; upload: Upload }" required>
+  Configuration options for the Updates instance.
+  
+  <Expandable title="IUpdatesOptions Properties">
+    <ParamField path="api" type="API" required>
+      API instance for making VK API calls.
+    </ParamField>
+    
+    <ParamField path="upload" type="Upload" required>
+      Upload instance for file operations.
+    </ParamField>
+    
+    <ParamField path="agent" type="Agent">
+      Custom HTTPS agent for network requests.
+    </ParamField>
+    
+    <ParamField path="pollingWait" type="number" default={3000}>
+      Time in milliseconds to wait between Long Poll requests.
+    </ParamField>
+    
+    <ParamField path="pollingRetryLimit" type="number" default={3}>
+      Number of retries for failed polling requests.
+    </ParamField>
+    
+    <ParamField path="pollingGroupId" type="number">
+      Group ID for Long Poll. Auto-detected if not specified.
+    </ParamField>
+    
+    <ParamField path="webhookSecret" type="string">
+      Secret key for validating webhook requests.
+    </ParamField>
+    
+    <ParamField path="webhookConfirmation" type="string">
+      Confirmation code required when setting up webhooks.
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+## Properties
+
+<ResponseField name="isStarted" type="boolean">
+  Returns `true` if updates are currently being received (either polling or webhook).
+</ResponseField>
+
+## Methods
+
+### use()
+
+Adds a middleware function to handle all updates.
+
+```typescript
+vk.updates.use(async (context, next) => {
+  console.log('Update received:', context.type);
+  await next();
+});
+```
+
+<ParamField path="middleware" type="Middleware<Context>" required>
+  Middleware function that receives context and next function.
+</ParamField>
+
+<ResponseField name="returns" type="this">
+  Returns the Updates instance for chaining.
+</ResponseField>
+
+### on()
+
+Subscribes to specific event types.
+
+```typescript
+vk.updates.on('message_new', async (context) => {
+  await context.send('Hello!');
+});
+```
+
+<ParamField path="events" type="AllowArray<ContextTypes>" required>
+  Event type(s) to listen for. Can be a single event or an array of events.
+</ParamField>
+
+<ParamField path="handler" type="AllowArray<Middleware<Context>>" required>
+  Handler function(s) to execute when the event occurs.
+</ParamField>
+
+<ResponseField name="returns" type="this">
+  Returns the Updates instance for chaining.
+</ResponseField>
+
+### start()
+
+Automatically determines and starts the appropriate update method (polling or webhook).
+
+```typescript
+await vk.updates.start();
+```
+
+<ParamField path="options" type="object">
+  <Expandable title="Start Options">
+    <ParamField path="webhook" type="IWebhookTransportStartOptions">
+      If provided, starts webhook mode. Otherwise starts polling.
+      
+      <Expandable title="Webhook Options">
+        <ParamField path="port" type="number">
+          Port to listen on.
+        </ParamField>
+        
+        <ParamField path="path" type="string">
+          URL path for webhook endpoint.
+        </ParamField>
+        
+        <ParamField path="host" type="string">
+          Host address to bind to.
+        </ParamField>
+      </Expandable>
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+<ResponseField name="returns" type="Promise<void>">
+  Promise that resolves when updates start successfully.
+</ResponseField>
+
+### startPolling()
+
+Starts receiving updates via VK Long Poll.
+
+```typescript
+await vk.updates.startPolling();
+```
+
+<ResponseField name="returns" type="Promise<void>">
+  Promise that resolves when polling starts.
+</ResponseField>
+
+### startWebhook()
+
+Starts an HTTP server to receive webhook updates.
+
+```typescript
+await vk.updates.startWebhook({
+  port: 8080,
+  path: '/webhook'
+});
+```
+
+<ParamField path="options" type="IWebhookTransportStartOptions">
+  <Expandable title="Options">
+    <ParamField path="port" type="number" default={80}>
+      Port number to listen on.
+    </ParamField>
+    
+    <ParamField path="path" type="string" default="/">
+      URL path for the webhook endpoint.
+    </ParamField>
+    
+    <ParamField path="host" type="string" default="0.0.0.0">
+      Host address to bind the server to.
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+<ResponseField name="returns" type="Promise<void>">
+  Promise that resolves when webhook server starts.
+</ResponseField>
+
+### stop()
+
+Stops receiving updates.
+
+```typescript
+await vk.updates.stop();
+```
+
+<ResponseField name="returns" type="Promise<void>">
+  Promise that resolves when updates stop.
+</ResponseField>
+
+### getWebhookCallback()
+
+Returns a callback function for use with http/express servers.
+
+```typescript
+import express from 'express';
+
+const app = express();
+app.use(express.json());
+app.post('/webhook', vk.updates.getWebhookCallback());
+
+app.listen(8080);
+```
+
+<ParamField path="path" type="string">
+  Optional path to handle (for filtering).
+</ParamField>
+
+<ResponseField name="returns" type="WebhookTransportCallback">
+  Callback function compatible with Node.js http and Express.
+</ResponseField>
+
+### getKoaWebhookMiddleware()
+
+Returns middleware for Koa framework.
+
+```typescript
+import Koa from 'koa';
+import bodyParser from 'koa-bodyparser';
+
+const app = new Koa();
+app.use(bodyParser());
+app.use(vk.updates.getKoaWebhookMiddleware());
+
+app.listen(8080);
+```
+
+<ResponseField name="returns" type="WebhookTransportKoaCallback">
+  Koa middleware function.
+</ResponseField>
+
+### handlePollingUpdate()
+
+Manually handles a Long Poll update.
+
+```typescript
+await vk.updates.handlePollingUpdate([4, 123, 1, 456]);
+```
+
+<ParamField path="update" type="any[]" required>
+  Raw Long Poll update array.
+</ParamField>
+
+<ResponseField name="returns" type="Promise<void>">
+  Promise that resolves when the update is processed.
+</ResponseField>
+
+### handleWebhookUpdate()
+
+Manually handles a webhook update.
+
+```typescript
+await vk.updates.handleWebhookUpdate({
+  type: 'message_new',
+  object: { /* ... */ },
+  group_id: 123
+});
+```
+
+<ParamField path="update" type="Record<string, any>" required>
+  Raw webhook update object.
+</ParamField>
+
+<ResponseField name="returns" type="Promise<void>">
+  Promise that resolves when the update is processed.
+</ResponseField>
+
+### dispatchMiddleware()
+
+Manually dispatches a context through the middleware chain.
+
+```typescript
+import { MessageContext } from 'vk-io';
+
+const context = new MessageContext({ /* ... */ });
+await vk.updates.dispatchMiddleware(context);
+```
+
+<ParamField path="context" type="Context" required>
+  Context instance to dispatch.
+</ParamField>
+
+<ResponseField name="returns" type="Promise<void>">
+  Promise that resolves when middleware chain completes.
+</ResponseField>
+
+## Event Types
+
+VK-IO supports all VK Callback API events:
+
+### Message Events
+
+- `message_new` - New message received
+- `message_edit` - Message edited
+- `message_reply` - Reply to a message
+- `message_allow` - User allowed messages
+- `message_deny` - User denied messages
+- `message_event` - Callback button pressed
+
+### Wall Events
+
+- `wall_post_new` - New wall post
+- `wall_repost` - Wall post reposted
+- `wall_reply_new` - New wall comment
+- `wall_reply_edit` - Wall comment edited
+- `wall_reply_delete` - Wall comment deleted
+- `wall_reply_restore` - Wall comment restored
+
+### Photo Events
+
+- `photo_new` - New photo uploaded
+- `photo_comment_new` - New photo comment
+- `photo_comment_edit` - Photo comment edited
+- `photo_comment_delete` - Photo comment deleted
+- `photo_comment_restore` - Photo comment restored
+
+### Video Events
+
+- `video_new` - New video uploaded
+- `video_comment_new` - New video comment
+- `video_comment_edit` - Video comment edited
+- `video_comment_delete` - Video comment deleted
+- `video_comment_restore` - Video comment restored
+
+### Group Events
+
+- `group_join` - User joined group
+- `group_leave` - User left group
+- `group_change_photo` - Group photo changed
+- `group_change_settings` - Group settings changed
+- `group_officers_edit` - Group officers changed
+
+### Board Events
+
+- `board_post_new` - New board topic
+- `board_post_edit` - Board topic edited
+- `board_post_delete` - Board topic deleted
+- `board_post_restore` - Board topic restored
+
+### Market Events
+
+- `market_comment_new` - New market comment
+- `market_comment_edit` - Market comment edited
+- `market_comment_delete` - Market comment deleted
+- `market_comment_restore` - Market comment restored
+- `market_order_new` - New market order
+- `market_order_edit` - Market order edited
+
+### Other Events
+
+- `poll_vote_new` - New poll vote
+- `user_block` - User blocked
+- `user_unblock` - User unblocked
+- `like_add` - Like added
+- `like_remove` - Like removed
+- `app_payload` - App callback
+- `vkpay_transaction` - VK Pay transaction
+- `donut_subscription_create` - Donut subscription created
+- `donut_subscription_prolonged` - Donut subscription renewed
+- `donut_subscription_expired` - Donut subscription expired
+- `donut_subscription_cancelled` - Donut subscription cancelled
+- `donut_subscription_price_changed` - Donut price changed
+- `donut_money_withdraw` - Donut money withdrawn
+- `donut_money_withdraw_error` - Donut withdrawal error
+
+## Examples
+
+### Simple Echo Bot
+
+```typescript
+import { VK } from 'vk-io';
+
+const vk = new VK({ token: process.env.VK_TOKEN });
+
+vk.updates.on('message_new', async (context) => {
+  if (context.isOutbox) return;
+  
+  await context.send(`You said: ${context.text}`);
+});
+
+await vk.updates.start();
+console.log('Bot started');
+```
+
+### Command Handler
+
+```typescript
+import { VK } from 'vk-io';
+
+const vk = new VK({ token: process.env.VK_TOKEN });
+
+vk.updates.on('message_new', async (context) => {
+  if (!context.text) return;
+  
+  const command = context.text.toLowerCase();
+  
+  if (command === '/start') {
+    await context.send('Welcome! Use /help to see available commands.');
+  } else if (command === '/help') {
+    await context.send('Available commands:\n/start - Start bot\n/help - Show help');
+  } else if (command === '/time') {
+    await context.send(`Current time: ${new Date().toLocaleString()}`);
+  }
+});
+
+await vk.updates.start();
+```
+
+### Multiple Event Handlers
+
+```typescript
+import { VK } from 'vk-io';
+
+const vk = new VK({ token: process.env.VK_TOKEN });
+
+// Handle new messages
+vk.updates.on('message_new', async (context) => {
+  console.log('New message:', context.text);
+});
+
+// Handle wall posts
+vk.updates.on('wall_post_new', async (context) => {
+  console.log('New wall post:', context.text);
+});
+
+// Handle likes
+vk.updates.on('like_add', async (context) => {
+  console.log('New like:', context.objectId);
+});
+
+// Handle group joins
+vk.updates.on('group_join', async (context) => {
+  console.log('User joined:', context.userId);
+});
+
+await vk.updates.start();
+```
+
+### Using Middleware
+
+```typescript
+import { VK } from 'vk-io';
+
+const vk = new VK({ token: process.env.VK_TOKEN });
+
+// Logging middleware
+vk.updates.use(async (context, next) => {
+  console.log(`[${new Date().toISOString()}] ${context.type}`);
+  await next();
+});
+
+// Filter middleware
+vk.updates.use(async (context, next) => {
+  if (context.type === 'message_new' && context.isOutbox) {
+    return; // Ignore outgoing messages
+  }
+  await next();
+});
+
+// Your handlers
+vk.updates.on('message_new', async (context) => {
+  await context.send('Hello!');
+});
+
+await vk.updates.start();
+```
+
+### Webhook with Express
+
+```typescript
+import express from 'express';
+import { VK } from 'vk-io';
+
+const vk = new VK({
+  token: process.env.VK_TOKEN,
+  webhookSecret: process.env.VK_WEBHOOK_SECRET,
+  webhookConfirmation: process.env.VK_WEBHOOK_CONFIRMATION
+});
+
+const app = express();
+app.use(express.json());
+
+vk.updates.on('message_new', async (context) => {
+  await context.send('Hello from webhook!');
+});
+
+app.post('/webhook', vk.updates.getWebhookCallback());
+
+app.listen(8080, () => {
+  console.log('Webhook server started on port 8080');
+});
+```
+
+### Webhook with Koa
+
+```typescript
+import Koa from 'koa';
+import bodyParser from 'koa-bodyparser';
+import { VK } from 'vk-io';
+
+const vk = new VK({
+  token: process.env.VK_TOKEN,
+  webhookSecret: process.env.VK_WEBHOOK_SECRET,
+  webhookConfirmation: process.env.VK_WEBHOOK_CONFIRMATION
+});
+
+const app = new Koa();
+app.use(bodyParser());
+
+vk.updates.on('message_new', async (context) => {
+  await context.send('Hello from Koa!');
+});
+
+app.use(vk.updates.getKoaWebhookMiddleware());
+
+app.listen(8080, () => {
+  console.log('Koa webhook server started');
+});
+```
+
+### Built-in Webhook Server
+
+```typescript
+import { VK } from 'vk-io';
+
+const vk = new VK({
+  token: process.env.VK_TOKEN,
+  webhookSecret: process.env.VK_WEBHOOK_SECRET,
+  webhookConfirmation: process.env.VK_WEBHOOK_CONFIRMATION
+});
+
+vk.updates.on('message_new', async (context) => {
+  await context.send('Hello!');
+});
+
+await vk.updates.start({
+  webhook: {
+    port: 8080,
+    path: '/webhook'
+  }
+});
+
+console.log('Webhook server running on http://localhost:8080/webhook');
+```
+
+### Handling Multiple Event Types
+
+```typescript
+import { VK } from 'vk-io';
+
+const vk = new VK({ token: process.env.VK_TOKEN });
+
+// Handle both new and edited messages
+vk.updates.on(['message_new', 'message_edit'], async (context) => {
+  if (context.type === 'message_edit') {
+    await context.send('You edited your message!');
+  } else {
+    await context.send('New message received!');
+  }
+});
+
+await vk.updates.start();
+```
+
+## Best Practices
+
+<Tip>
+**Choose the Right Transport**:
+- Use **Long Poll** for development and simple bots
+- Use **Webhooks** for production with high load and faster response times
+</Tip>
+
+<Warning>
+**Webhook Security**: Always set `webhookSecret` when using webhooks to prevent unauthorized requests:
+```typescript
+const vk = new VK({
+  token: process.env.VK_TOKEN,
+  webhookSecret: process.env.VK_WEBHOOK_SECRET
+});
+```
+</Warning>
+
+<Note>
+**Error Handling**: Wrap your handlers in try-catch to prevent crashes:
+```typescript
+vk.updates.on('message_new', async (context) => {
+  try {
+    await context.send('Hello!');
+  } catch (error) {
+    console.error('Failed to send message:', error);
+  }
+});
+```
+</Note>

@@ -1,0 +1,256 @@
+---
+title: Installation
+description: Install VK-IO in your Node.js project using npm, yarn, or pnpm
+---
+
+# Installation
+
+Get started with VK-IO by installing it in your Node.js project. VK-IO supports all modern package managers and comes with full TypeScript support out of the box.
+
+## Requirements
+
+<Note>
+  **Node.js 12.20.0 or newer is required**
+  
+  VK-IO requires a modern Node.js runtime with ESM support. Check your Node.js version with `node --version`.
+</Note>
+
+Before installing VK-IO, ensure you have:
+
+- **Node.js** 12.20.0 or higher
+- A **VK API token** (group token or user token)
+- A package manager: **npm**, **yarn**, or **pnpm**
+
+## Installing VK-IO
+
+Choose your preferred package manager to install VK-IO:
+
+<CodeGroup>
+```bash npm
+npm install vk-io
+```
+
+```bash yarn
+yarn add vk-io
+```
+
+```bash pnpm
+pnpm add vk-io
+```
+</CodeGroup>
+
+## Getting Your VK API Token
+
+To use VK-IO, you need an API token from VK. The type of token depends on your use case:
+
+### Community (Group) Token
+
+For building bots and automated community tools:
+
+<Steps>
+  <Step title="Create or Select a Community">
+    Go to [vk.com/groups](https://vk.com/groups) and create a new community or select an existing one
+  </Step>
+  
+  <Step title="Access Settings">
+    Navigate to **Manage** → **Settings** → **API usage**
+  </Step>
+  
+  <Step title="Create Access Token">
+    Click **Create token** and select the required permissions:
+    - For bots: `messages` (to send and receive messages)
+    - For wall posts: `wall` (to create and manage wall posts)
+    - For additional features: select other permissions as needed
+  </Step>
+  
+  <Step title="Enable Messages API (for bots)">
+    If building a bot, enable **Long Poll API** under **Messages** → **Bot settings**
+  </Step>
+  
+  <Step title="Save Your Token">
+    Copy the generated token and store it securely (never commit it to version control)
+  </Step>
+</Steps>
+
+### User Token
+
+For applications that need user-level access:
+
+<Warning>
+  User tokens provide access to your personal account. Use them carefully and never share them. For most bot applications, use a Community token instead.
+</Warning>
+
+You can obtain a user token through:
+
+- **Implicit Flow** - Using the [@vk-io/authorization](https://github.com/negezor/vk-io/tree/master/packages/authorization) package
+- **VK Admin Panel** - Through the VK application settings
+
+For detailed authorization flows, see the [Authorization Guide](/ecosystem/authorization).
+
+## Storing Your Token Securely
+
+Never hardcode your token in your source code. Use environment variables instead:
+
+<Steps>
+  <Step title="Create a .env file">
+    Create a `.env` file in your project root:
+    
+    ```bash
+    TOKEN=your_vk_token_here
+    ```
+  </Step>
+  
+  <Step title="Add .env to .gitignore">
+    Ensure `.env` is in your `.gitignore` file:
+    
+    ```bash .gitignore
+    .env
+    node_modules/
+    ```
+  </Step>
+  
+  <Step title="Install dotenv (optional)">
+    If using CommonJS, install dotenv to load environment variables:
+    
+    ```bash
+    npm install dotenv
+    ```
+    
+    Then load it at the top of your main file:
+    
+    ```javascript
+    require('dotenv').config();
+    ```
+  </Step>
+</Steps>
+
+<Tip>
+  For production deployments, use your hosting platform's environment variable configuration instead of `.env` files.
+</Tip>
+
+## Module System Support
+
+VK-IO supports both ESM (ES Modules) and CommonJS:
+
+<CodeGroup>
+```javascript ES Modules (ESM)
+import { VK } from 'vk-io';
+
+const vk = new VK({
+  token: process.env.TOKEN
+});
+```
+
+```javascript CommonJS
+const { VK } = require('vk-io');
+
+const vk = new VK({
+  token: process.env.TOKEN
+});
+```
+</CodeGroup>
+
+<Note>
+  VK-IO is built with native ESM support. For the best experience, use ES Modules in your project by adding `"type": "module"` to your `package.json`.
+</Note>
+
+## TypeScript Support
+
+VK-IO is written in TypeScript and includes full type definitions:
+
+```typescript
+import { VK, MessageContext } from 'vk-io';
+
+const vk = new VK({
+  token: process.env.TOKEN as string
+});
+
+vk.updates.on('message_new', async (context: MessageContext) => {
+  // Full TypeScript autocomplete and type checking
+  await context.send('Hello!');
+});
+
+vk.updates.start();
+```
+
+No additional `@types` packages are needed - everything is included.
+
+## Installing Ecosystem Packages
+
+Enhance VK-IO with official ecosystem packages:
+
+<CodeGroup>
+```bash npm
+# Command matching
+npm install @vk-io/hear
+
+# Session management
+npm install @vk-io/session
+
+# Conversation scenes
+npm install @vk-io/scenes
+
+# Real-time streaming
+npm install @vk-io/streaming
+
+# User authorization
+npm install @vk-io/authorization
+```
+
+```bash yarn
+yarn add @vk-io/hear @vk-io/session @vk-io/scenes
+```
+
+```bash pnpm
+pnpm add @vk-io/hear @vk-io/session @vk-io/scenes
+```
+</CodeGroup>
+
+See the Ecosystem section in the documentation for detailed information about each package.
+
+## Verifying Your Installation
+
+Test your installation with a simple API call:
+
+```javascript
+import { VK } from 'vk-io';
+
+const vk = new VK({
+  token: process.env.TOKEN
+});
+
+async function test() {
+  const response = await vk.api.users.get({
+    user_ids: [1]
+  });
+  
+  console.log(response);
+}
+
+test().catch(console.error);
+```
+
+Run the script:
+
+```bash
+node test.js
+```
+
+If you see user information in the console, you're ready to build with VK-IO!
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Quick Start" icon="rocket" href="/quickstart">
+    Build your first VK bot with a working example
+  </Card>
+  <Card title="API Documentation" icon="book" href="/api-reference/vk">
+    Explore the complete API reference
+  </Card>
+  <Card title="Updates & Webhooks" icon="bolt" href="/core/updates">
+    Learn how to receive and handle VK events
+  </Card>
+  <Card title="Examples" icon="code" href="/examples/simple-bot">
+    Discover real-world implementation examples
+  </Card>
+</CardGroup>
