@@ -1,0 +1,129 @@
+{
+  "projectType": "sdk-library",
+  "projectName": "VK-IO",
+  "projectDescription": "Modern VK API SDK for Node.js with TypeScript support and 100% API coverage",
+  "theme": "palm",
+  "primaryColor": "#4680C2",
+  "lightColor": "#5A9BD5",
+  "darkColor": "#3567A3",
+  "navigation": {
+    "tabs": [
+      {
+        "tab": "Documentation",
+        "groups": [
+          {
+            "group": "Getting Started",
+            "pages": [
+              "introduction",
+              "installation",
+              "quickstart"
+            ]
+          },
+          {
+            "group": "Core Concepts",
+            "pages": [
+              "core/api",
+              "core/updates",
+              "core/contexts",
+              "core/upload",
+              "core/keyboard"
+            ]
+          },
+          {
+            "group": "Advanced Features",
+            "pages": [
+              "advanced/collect",
+              "advanced/attachments",
+              "advanced/middleware",
+              "advanced/error-handling"
+            ]
+          },
+          {
+            "group": "Ecosystem",
+            "pages": [
+              "ecosystem/authorization",
+              "ecosystem/session",
+              "ecosystem/scenes",
+              "ecosystem/streaming",
+              "ecosystem/hear",
+              "ecosystem/stateless-prompt"
+            ]
+          },
+          {
+            "group": "Examples",
+            "pages": [
+              "examples/simple-bot",
+              "examples/keyboard-bot",
+              "examples/file-upload"
+            ]
+          },
+          {
+            "group": "Migration & Resources",
+            "pages": [
+              "migration/v4-migration",
+              "resources/community-modules",
+              "resources/contributing"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "API Reference",
+        "groups": [
+          {
+            "group": "Core Classes",
+            "pages": [
+              "api-reference/vk",
+              "api-reference/api",
+              "api-reference/updates",
+              "api-reference/upload"
+            ]
+          },
+          {
+            "group": "Structures",
+            "pages": [
+              "api-reference/keyboard",
+              "api-reference/attachments",
+              "api-reference/contexts"
+            ]
+          },
+          {
+            "group": "Utilities",
+            "pages": [
+              "api-reference/collect",
+              "api-reference/helpers",
+              "api-reference/errors"
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "keyFeatures": [
+    "100% VK API coverage with 1:1 method mapping",
+    "Written in TypeScript with full type definitions",
+    "Support for Long Poll (User & Bots) and Callback API",
+    "Automatic request parallelization and rate limiting",
+    "Built-in keyboard builder and file upload utilities",
+    "Middleware-based event handling",
+    "Native ESM and CommonJS support",
+    "User authorization including login/password flow",
+    "Rich ecosystem with session, scenes, and streaming modules"
+  ],
+  "publicApiSurface": [
+    "VK - Main class providing unified interface",
+    "API - VK API methods with automatic type mapping",
+    "Updates - Event handling for Long Poll and Webhook",
+    "Upload - File upload utilities for various attachment types",
+    "Keyboard - Keyboard builder with chainable API",
+    "MessageContext - Context for message events",
+    "Attachment classes - Photo, Video, Document, etc.",
+    "Collect - Iterator utilities for paginated API requests",
+    "@vk-io/authorization - Authorization flows",
+    "@vk-io/session - Session management",
+    "@vk-io/scenes - Scene-based conversation flows",
+    "@vk-io/streaming - Streaming API client",
+    "@vk-io/hear - Text matching middleware",
+    "@vk-io/stateless-prompt - Stateless prompts"
+  ]
+}
